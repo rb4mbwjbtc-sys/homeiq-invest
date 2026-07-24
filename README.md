@@ -29,7 +29,7 @@ npm run dev
 npm run build
 ```
 
-## V2.2 – angeforderte Anpassungen
+## V2.3 – angeforderte Anpassungen
 
 - Standort- und Marktdaten bleiben leer, bis «Laden» angeklickt wird.
 - Marktwert-Aktion direkt im Bereich Finanzierung unter dem Kaufpreis.
@@ -38,7 +38,7 @@ npm run build
 - Separates, kompaktes A4-Einseitenlayout für den PDF-/Druckexport im HomeIQ-Design.
 
 
-## V2.2 Änderungen
+## V2.3 Änderungen
 - Standortdaten-Lader auf Seite Lage & Markt verschoben
 - Marktwert- und Marktmietresultate im erweiterten HomeIQ-Layout
 - Marktmiete automatisch berechnen

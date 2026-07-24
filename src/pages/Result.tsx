@@ -1,5 +1,7 @@
 import { ArrowLeft, Download, MapPin, TrendingUp } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import { calculateAnalysis } from "../lib/calculations";
 import { findAnalysis } from "../lib/storage";
 import { money, number, percent } from "../lib/format";
@@ -44,6 +46,33 @@ export function Result() {
   const location = result.locationAnalysis;
   const dynamicScoreColor = scoreColor(result.score);
 
+
+  const exportPdf = async () => {
+    const element = document.querySelector<HTMLElement>(".print-report");
+    if (!element) return;
+    element.classList.add("pdf-capture");
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+        useCORS: true,
+        logging: false,
+      });
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+      const width = canvas.width * ratio;
+      const height = canvas.height * ratio;
+      const x = (pageWidth - width) / 2;
+      const y = (pageHeight - height) / 2;
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.94), "JPEG", x, y, width, height, undefined, "FAST");
+      const safeTitle = input.title.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, "-");
+      pdf.save(`HomeIQ_${safeTitle}.pdf`);
+    } finally {
+      element.classList.remove("pdf-capture");
+    }
+  };
   const scoreStyle = {
     borderColor: dynamicScoreColor,
     boxShadow: `inset 0 0 0 1px rgba(255,255,255,.18), 0 0 0 4px ${dynamicScoreColor}22`,
@@ -55,7 +84,7 @@ export function Result() {
         <Link className="text-link" to="/analysen">
           <ArrowLeft size={17} /> Analysen
         </Link>
-        <button className="button secondary" onClick={() => window.print()}>
+        <button className="button secondary" onClick={exportPdf}>
           <Download size={17} /> PDF exportieren
         </button>
       </div>
@@ -63,7 +92,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2.3</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}

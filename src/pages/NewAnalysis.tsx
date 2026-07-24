@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Building2,
   Check,
@@ -14,7 +14,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import type { AnalysisInput, PropertyType, RentalUnit } from "../types";
-import { saveAnalysis } from "../lib/storage";
+import { findAnalysis, saveAnalysis } from "../lib/storage";
 import { analyseLocation, analyseMarket } from "../lib/market";
 import { money } from "../lib/format";
 
@@ -101,9 +101,11 @@ const initial: AnalysisInput = {
 };
 
 export function NewAnalysis() {
+  const { id: editId } = useParams();
+  const existingAnalysis = editId ? findAnalysis(editId) : undefined;
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<AnalysisInput>(initial);
-  const [locationLoaded, setLocationLoaded] = useState(false);
+  const [form, setForm] = useState<AnalysisInput>(() => existingAnalysis ? structuredClone(existingAnalysis) : structuredClone(initial));
+  const [locationLoaded, setLocationLoaded] = useState(() => Boolean(existingAnalysis && existingAnalysis.regionalMarketPricePerSqm > 0));
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [marketValueGenerated, setMarketValueGenerated] = useState<number | null>(null);
   const [marketRentGenerated, setMarketRentGenerated] = useState<number | null>(null);
@@ -233,13 +235,22 @@ export function NewAnalysis() {
 
   const useMarketRent = () => {
     if (!generatedMarket) return;
-    if (form.propertyType !== "mfh") {
-      set("monthlyRent", Math.round(generatedMarket.estimatedMonthlyMarketRent));
+    if (form.propertyType === "mfh") {
+      const byId = new Map<string, (typeof generatedMarket.units)[number]>(generatedMarket.units.map((unit) => [unit.id, unit]));
+      setForm((previous) => ({
+        ...previous,
+        rentalUnits: previous.rentalUnits.map((unit) => {
+          const result = byId.get(unit.id);
+          return result ? { ...unit, currentMonthlyRent: Math.round(result.estimatedMonthlyMarketRent) } : unit;
+        }),
+      }));
+      return;
     }
+    set("monthlyRent", Math.round(generatedMarket.estimatedMonthlyMarketRent));
   };
 
   const submit = () => {
-    const id = crypto.randomUUID();
+    const id = editId || crypto.randomUUID();
     const title = form.title.trim() || `${selectedLabel} ${form.city || "ohne Ort"}`;
     const monthlyRent =
       form.propertyType === "mfh"
@@ -256,7 +267,7 @@ export function NewAnalysis() {
       title,
       monthlyRent,
       livingArea,
-      createdAt: new Date().toISOString(),
+      createdAt: existingAnalysis?.createdAt || new Date().toISOString(),
     });
     navigate(`/ergebnis/${id}`);
   };
@@ -266,8 +277,8 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">NEUE ANALYSE · V2.2</span>
-        <h1>Immobilie erfassen</h1>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V2.3</span>
+        <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit Lageanalyse, Marktwert- und Marktmietschätzung.</p>
       </div>
 
@@ -940,12 +951,22 @@ export function NewAnalysis() {
                   <small className="market-source">
                     Modellbasierte Vergleichswerte im Umkreis von {form.marketDataRadiusKm} km · Datenqualität: {generatedMarket.confidence}
                   </small>
-                  {form.propertyType !== "mfh" && (
-                    <div className="market-choice-actions">
-                      <button type="button" className="button market-accept" onClick={useMarketRent}>Marktmiete übernehmen</button>
-                      <button type="button" className="button text-choice" onClick={() => setMarketRentGenerated(null)}>Eigene Miete verwenden</button>
+                  {form.propertyType === "mfh" && (
+                    <div className="unit-market-rent-preview">
+                      {generatedMarket.units.map((unit) => (
+                        <div key={unit.id}>
+                          <span>{unit.label}</span>
+                          <strong>{money(unit.estimatedMonthlyMarketRent)} / Monat</strong>
+                        </div>
+                      ))}
                     </div>
                   )}
+                  <div className="market-choice-actions">
+                    <button type="button" className="button market-accept" onClick={useMarketRent}>
+                      {form.propertyType === "mfh" ? "Marktmieten für alle Wohnungen übernehmen" : "Marktmiete übernehmen"}
+                    </button>
+                    <button type="button" className="button text-choice" onClick={() => setMarketRentGenerated(null)}>Eigene Miete verwenden</button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1043,7 +1064,7 @@ export function NewAnalysis() {
               Zurück
             </button>
             <button className="button primary" onClick={submit}>
-              Analyse berechnen
+              {editId ? "Änderungen speichern" : "Analyse berechnen"}
             </button>
           </div>
         </section>

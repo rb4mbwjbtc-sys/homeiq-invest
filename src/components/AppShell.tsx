@@ -1,4 +1,4 @@
-import { BarChart3, Building2, Home, Menu, PlusCircle, Settings, X } from "lucide-react";
+import { BarChart3, Building2, Home, Menu, PlusCircle, Settings, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
@@ -39,10 +39,16 @@ export function AppShell() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="plan-card">
-            <span className="eyebrow">HOMEIQ PREMIUM</span>
-            <strong>Mehr aus jeder Analyse</strong>
-            <small>Unbegrenzte Analysen, professionelle PDF-Berichte und geräteübergreifender Zugriff.</small>
+          <div className="plan-card premium-plan-card">
+            <span className="premium-plan-title"><Sparkles size={16} /> PREMIUM – CHF 9.90 / MONAT</span>
+            <ul>
+              <li>Unbegrenzte Analysen</li>
+              <li>Professioneller PDF-Bericht</li>
+              <li>Geräteübergreifender Zugriff auf alle Analysen</li>
+              <li>Automatische Marktmiete berechnen</li>
+              <li>Optimale Kaufpreisberechnung</li>
+            </ul>
+            <button className="premium-unlock-button">Premium freischalten</button>
           </div>
         </div>
       </aside>
