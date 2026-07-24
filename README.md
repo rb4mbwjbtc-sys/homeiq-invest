@@ -1,6 +1,6 @@
-# HomeIQ Independent v2.5
+# HomeIQ Independent v2.6
 
-V2.5 basiert auf V2.4 und enthält:
+V2.6 basiert auf V2.4 und enthält:
 
 - HomeIQ Scorekarte nach dem freigegebenen Referenzdesign
 - Scorekarte in Dashboard, Ergebnisansicht und PDF
