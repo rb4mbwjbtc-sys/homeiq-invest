@@ -29,10 +29,17 @@ npm run dev
 npm run build
 ```
 
-## V2.1 – angeforderte Anpassungen
+## V2.2 – angeforderte Anpassungen
 
 - Standort- und Marktdaten bleiben leer, bis «Laden» angeklickt wird.
 - Marktwert-Aktion direkt im Bereich Finanzierung unter dem Kaufpreis.
 - Marktmiet-Aktion direkt unter der Nettomiete; beim MFH aggregiert aus den einzelnen Wohnungen.
 - Score-Ring und Bewertungsbalken mit kontinuierlicher Farblogik von Rot bis Grün.
 - Separates, kompaktes A4-Einseitenlayout für den PDF-/Druckexport im HomeIQ-Design.
+
+
+## V2.2 Änderungen
+- Standortdaten-Lader auf Seite Lage & Markt verschoben
+- Marktwert- und Marktmietresultate im erweiterten HomeIQ-Layout
+- Marktmiete automatisch berechnen
+- Dynamische Eigenkapitalquote / Finanzierungsbeurteilung

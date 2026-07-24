@@ -114,6 +114,23 @@ export function NewAnalysis() {
     [form.propertyType],
   );
 
+  const calculationInput = useMemo(() => {
+    if (form.propertyType !== "mfh") return form;
+    return {
+      ...form,
+      livingArea: form.rentalUnits.reduce((sum, unit) => sum + unit.livingArea, 0),
+      monthlyRent: form.rentalUnits.reduce(
+        (sum, unit) => sum + unit.currentMonthlyRent,
+        0,
+      ),
+    };
+  }, [form]);
+
+  const generatedMarket = useMemo(() => {
+    if (!locationLoaded) return null;
+    return analyseMarket(calculationInput, analyseLocation(calculationInput));
+  }, [calculationInput, locationLoaded]);
+
   const set = <K extends keyof AnalysisInput>(key: K, value: AnalysisInput[K]) => {
     setForm((previous) => ({ ...previous, [key]: value }));
   };
@@ -200,15 +217,25 @@ export function NewAnalysis() {
   };
 
   const generateMarketValue = () => {
-    if (!locationLoaded || form.regionalMarketPricePerSqm <= 0) return;
-    const market = analyseMarket(form, analyseLocation(form));
-    setMarketValueGenerated(market.estimatedMarketValue);
+    if (!generatedMarket || form.regionalMarketPricePerSqm <= 0) return;
+    setMarketValueGenerated(generatedMarket.estimatedMarketValue);
   };
 
   const generateMarketRent = () => {
-    if (!locationLoaded || form.regionalMarketRentPerSqm <= 0) return;
-    const market = analyseMarket(form, analyseLocation(form));
-    setMarketRentGenerated(market.estimatedMonthlyMarketRent);
+    if (!generatedMarket || form.regionalMarketRentPerSqm <= 0) return;
+    setMarketRentGenerated(generatedMarket.estimatedMonthlyMarketRent);
+  };
+
+  const useAttractivePurchasePrice = (factor: number) => {
+    if (!generatedMarket) return;
+    set("purchasePrice", Math.round((generatedMarket.estimatedMarketValue * factor) / 5000) * 5000);
+  };
+
+  const useMarketRent = () => {
+    if (!generatedMarket) return;
+    if (form.propertyType !== "mfh") {
+      set("monthlyRent", Math.round(generatedMarket.estimatedMonthlyMarketRent));
+    }
   };
 
   const submit = () => {
@@ -239,7 +266,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">NEUE ANALYSE · V2</span>
+        <span className="eyebrow">NEUE ANALYSE · V2.2</span>
         <h1>Immobilie erfassen</h1>
         <p>Mit Lageanalyse, Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -319,36 +346,6 @@ export function NewAnalysis() {
                 }}
               />
             </label>
-          </div>
-
-          <div className={`location-loader ${locationLoaded ? "loaded" : ""}`}>
-            <MapPin size={23} />
-            <div>
-              <strong>Standortdaten automatisch laden</strong>
-              <span>
-                Die Lage- und Marktwerte bleiben leer, bis sie aktiv geladen werden.
-              </span>
-              {locationLoaded && (
-                <small>
-                  ✓ {form.city || form.postalCode} · Datenradius {form.marketDataRadiusKm} km
-                </small>
-              )}
-            </div>
-            <button
-              className="button secondary"
-              onClick={loadLocation}
-              disabled={!form.postalCode || !form.city || loadingLocation}
-            >
-              {loadingLocation ? (
-                <>
-                  <Loader2 className="spin" size={16} /> Lädt
-                </>
-              ) : locationLoaded ? (
-                "Neu laden"
-              ) : (
-                "Laden"
-              )}
-            </button>
           </div>
 
           <div className="form-grid">
@@ -590,17 +587,43 @@ export function NewAnalysis() {
       {step === 3 && (
         <section className="panel form-panel">
           <h2>Lage- und Marktdaten</h2>
+
+          <div className={`location-loader ${locationLoaded ? "loaded" : ""}`}>
+            <MapPin size={23} />
+            <div>
+              <strong>Standortdaten automatisch laden</strong>
+              <span>
+                Leerstand, Nachfrage, Erreichbarkeit und Marktbenchmarks werden erst
+                nach dem Klick auf «Laden» eingetragen.
+              </span>
+              {locationLoaded && (
+                <small>
+                  ✓ {form.city || form.postalCode} · Datenradius {form.marketDataRadiusKm} km
+                </small>
+              )}
+            </div>
+            <button
+              className="button secondary"
+              onClick={loadLocation}
+              disabled={!form.postalCode || !form.city || loadingLocation}
+            >
+              {loadingLocation ? (
+                <>
+                  <Loader2 className="spin" size={16} /> Lädt
+                </>
+              ) : locationLoaded ? (
+                "Neu laden"
+              ) : (
+                "Laden"
+              )}
+            </button>
+          </div>
+
           {!locationLoaded ? (
-            <div className="empty-data">
+            <div className="empty-data compact-empty">
               <MapPin size={28} />
               <h3>Noch keine Standortdaten geladen</h3>
-              <p>
-                Gehe zu den Objektdaten zurück und klicke auf «Laden». Bis dahin bleiben
-                sämtliche Standort- und Benchmarkfelder leer.
-              </p>
-              <button className="button secondary" onClick={() => setStep(2)}>
-                Zu den Objektdaten
-              </button>
+              <p>Die Felder bleiben bewusst leer, bis du die Daten oben aktiv lädst.</p>
             </div>
           ) : (
             <div className="form-grid">
@@ -768,10 +791,55 @@ export function NewAnalysis() {
               >
                 <Sparkles size={20} /> Optimalen Kaufpreis berechnen (Premium)
               </button>
-              {marketValueGenerated !== null && (
-                <div className="generated-result">
-                  <span>Geschätzter Marktwert</span>
-                  <strong>{money(marketValueGenerated)}</strong>
+              {marketValueGenerated !== null && generatedMarket && (
+                <div className="market-calculation-card">
+                  <div className="market-card-heading">
+                    <span className="eyebrow">MARKTWERTANALYSE</span>
+                    <h3>Geschätzter Marktwert</h3>
+                    <p>
+                      Unabhängige Schätzung auf Basis von Lage, Zustand, Ausstattung und
+                      regionalem Vergleichswert. Der eingegebene Kaufpreis fliesst nicht
+                      in die Marktwertberechnung ein.
+                    </p>
+                  </div>
+                  <div className="market-main-value">
+                    <span>GESCHÄTZTER MARKTWERT</span>
+                    <strong>{money(generatedMarket.estimatedMarketValue)}</strong>
+                    <small>
+                      Marktwertspanne: {money(generatedMarket.marketValueLow)} – {money(generatedMarket.marketValueHigh)}
+                    </small>
+                  </div>
+                  <div className="market-comparison-row">
+                    <div>
+                      <span>IHR EINGETRAGENER KAUFPREIS</span>
+                      <strong>{money(form.purchasePrice)}</strong>
+                    </div>
+                    <b className={generatedMarket.priceDifferencePercent >= 0 ? "positive-text" : "negative-text"}>
+                      {generatedMarket.priceDifferencePercent >= 0 ? "+" : ""}{generatedMarket.priceDifferencePercent.toFixed(1)} %
+                    </b>
+                  </div>
+                  <div className="market-offer-row attractive">
+                    <div>
+                      <span>ATTRAKTIVER KAUFPREIS</span>
+                      <strong>{money(generatedMarket.estimatedMarketValue * 0.94)}</strong>
+                    </div>
+                    <button type="button" className="button secondary" onClick={() => useAttractivePurchasePrice(0.94)}>Übernehmen</button>
+                  </div>
+                  <div className="market-offer-row very-attractive">
+                    <div>
+                      <span>SEHR ATTRAKTIVER KAUFPREIS</span>
+                      <strong>{money(generatedMarket.estimatedMarketValue * 0.88)}</strong>
+                    </div>
+                    <button type="button" className="button secondary" onClick={() => useAttractivePurchasePrice(0.88)}>Übernehmen</button>
+                  </div>
+                  <p className="market-explanation">
+                    Die Schätzung berücksichtigt den regionalen Quadratmeterpreis, die
+                    Lagequalität, den Objektzustand, den Ausbaustandard und vorhandene
+                    Ausstattungsmerkmale.
+                  </p>
+                  <small className="market-source">
+                    Modellbasierte Vergleichswerte im Umkreis von {form.marketDataRadiusKm} km · Datenqualität: {generatedMarket.confidence}
+                  </small>
                 </div>
               )}
             </div>
@@ -836,12 +904,48 @@ export function NewAnalysis() {
                 onClick={generateMarketRent}
                 disabled={!locationLoaded}
               >
-                <Sparkles size={20} /> Marktmiete automatisch schätzen (Premium)
+                <Sparkles size={20} /> Marktmiete automatisch berechnen (Premium)
               </button>
-              {marketRentGenerated !== null && (
-                <div className="generated-result">
-                  <span>Geschätzte Marktmiete / Monat</span>
-                  <strong>{money(marketRentGenerated)}</strong>
+              {marketRentGenerated !== null && generatedMarket && (
+                <div className="market-calculation-card rent-card">
+                  <div className="market-card-heading">
+                    <span className="eyebrow">MARKTMIETANALYSE</span>
+                    <h3>Geschätzte Marktmiete</h3>
+                    <p>
+                      Unabhängige Schätzung auf Basis von Lage, Objektdaten und regionalen
+                      Marktinformationen. Die eingegebene Miete fliesst nicht in die
+                      Berechnung ein.
+                    </p>
+                  </div>
+                  <div className="market-main-value">
+                    <span>GESCHÄTZTE MARKTMIETE</span>
+                    <strong>{money(generatedMarket.estimatedMonthlyMarketRent)} <em>/ Monat</em></strong>
+                    <small>
+                      Marktspanne: {money(generatedMarket.estimatedMonthlyMarketRent * 0.90)} – {money(generatedMarket.estimatedMonthlyMarketRent * 1.10)} / Monat
+                    </small>
+                  </div>
+                  <div className="market-comparison-row">
+                    <div>
+                      <span>IHRE EINGETRAGENE NETTOMIETE</span>
+                      <strong>{money(generatedMarket.currentMonthlyRent)} / Mt.</strong>
+                    </div>
+                    <b className={generatedMarket.rentDifferencePercent >= 0 ? "positive-text" : "negative-text"}>
+                      {generatedMarket.rentDifferencePercent >= 0 ? "+" : ""}{generatedMarket.rentDifferencePercent.toFixed(1)} %
+                    </b>
+                  </div>
+                  <p className="market-explanation">
+                    Die Schätzung berücksichtigt Lagequalität, Wohnfläche, Stockwerk,
+                    Zustand, Ausbaustandard, Ausstattung und Parkierung.
+                  </p>
+                  <small className="market-source">
+                    Modellbasierte Vergleichswerte im Umkreis von {form.marketDataRadiusKm} km · Datenqualität: {generatedMarket.confidence}
+                  </small>
+                  {form.propertyType !== "mfh" && (
+                    <div className="market-choice-actions">
+                      <button type="button" className="button market-accept" onClick={useMarketRent}>Marktmiete übernehmen</button>
+                      <button type="button" className="button text-choice" onClick={() => setMarketRentGenerated(null)}>Eigene Miete verwenden</button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -863,6 +967,29 @@ export function NewAnalysis() {
               />
             </label>
           </div>
+
+          {(() => {
+            const totalInvestment = form.purchasePrice + form.ancillaryCosts;
+            const equityRatio = totalInvestment > 0 ? (form.equity / totalInvestment) * 100 : 0;
+            const status =
+              equityRatio >= 40
+                ? { tone: "strong", title: "Komfortable Eigenkapitalbasis", text: "Die Eigenkapitalquote liegt deutlich über der üblichen Mindestanforderung für Renditeobjekte." }
+                : equityRatio >= 30
+                  ? { tone: "good", title: "Solide Finanzierungsbasis", text: "Die Eigenkapitalquote liegt über der banküblichen Mindestfinanzierung und bietet einen zusätzlichen Puffer." }
+                  : equityRatio >= 25
+                    ? { tone: "minimum", title: "Bankübliche Mindestfinanzierung", text: "Die Eigenkapitalquote erfüllt grundsätzlich die übliche Mindestanforderung für Renditeobjekte. Die definitive Finanzierung hängt jedoch von Belehnungswert, Ertrag, Tragbarkeit und Bankprüfung ab." }
+                    : { tone: "critical", title: "Eigenkapitalquote voraussichtlich zu tief", text: "Für Renditeobjekte verlangen Banken häufig mindestens rund 25 % Eigenkapital. Eine höhere Eigenkapitalquote oder ein tieferer Kaufpreis kann erforderlich sein." };
+
+            return (
+              <div className={`affordability-card ${status.tone}`}>
+                <span className="affordability-ratio">EIGENKAPITALQUOTE {equityRatio.toFixed(1)} %</span>
+                <strong>{status.title}</strong>
+                <p>{status.text}</p>
+                <small>Hinweis: Die tatsächliche Kreditentscheidung liegt bei der finanzierenden Bank.</small>
+              </div>
+            );
+          })()}
+
           <div className="form-footer">
             <button className="button secondary" onClick={() => setStep(3)}>
               Zurück
