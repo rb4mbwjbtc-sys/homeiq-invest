@@ -1,30 +1,17 @@
-# HomeIQ Independent v2
+# HomeIQ Independent V3
 
-Unabhängige HomeIQ-Version mit beibehaltenem Design.
-
-## Neu in V2
-
-- Transparente Lageanalyse mit acht Faktoren
-- Marktwertschätzung mit regionalem CHF/m²-Benchmark
-- Marktmietschätzung
-- Beim Mehrfamilienhaus: Marktmiete für jede Wohnung separat
-- Marktwert- und Mietpreisbandbreiten
-- PDF-/Druckbericht im HomeIQ-App-Design
-- Datenradius bis maximal 10 km
+V3 ergänzt klickbasierte Standortdaten, Marktwert- und Marktmietschätzung, einen dynamisch eingefärbten Score-Ring sowie einen kompakten einseitigen A4-PDF-Bericht im HomeIQ-Design.
 
 ## Wichtiger Hinweis
-
-V2 verwendet vom Benutzer eingegebene regionale Benchmarks und ein transparentes Rechenmodell. Es werden noch keine Live-Daten eines externen Immobilien-Datenanbieters abgerufen.
+Die Standort- und Marktwerte sind in dieser unabhängigen Entwicklungsstufe modellbasierte Demo-Schätzungen. Für produktive Live-Daten ist später ein verifizierter Datenanbieter/API anzubinden.
 
 ## Start
-
 ```bash
 npm install
 npm run dev
 ```
 
 ## Build
-
 ```bash
 npm run build
 ```
