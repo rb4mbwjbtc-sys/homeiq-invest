@@ -1,34 +1,484 @@
-import { ArrowLeft, Download, MapPin } from "lucide-react";
+import { ArrowLeft, Download, MapPin, TrendingUp } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { calculateAnalysis } from "../lib/calculations";
 import { findAnalysis } from "../lib/storage";
 import { money, number, percent } from "../lib/format";
+import { scoreColor } from "../lib/scoreColor";
 
-const factorLabels={netYield:"Nettorendite",equityReturn:"Eigenkapitalrendite",location:"Lagequalität",condition:"Zustand",features:"Ausstattung"};
-const factorWeights={netYield:"35 %",equityReturn:"20 %",location:"25 %",condition:"12 %",features:"8 %"};
-const signedMoney=(v:number)=>`${v>=0?"+ ":"- "}${money(Math.abs(v))}`;
-const scoreColor=(score:number)=>`hsl(${Math.max(0,Math.min(120,score*1.2))} 66% ${score>=75?38:43}%)`;
+const factorLabels = {
+  netYield: "Nettorendite",
+  equityReturn: "Eigenkapitalrendite",
+  location: "Lagequalität",
+  condition: "Zustand",
+  features: "Ausstattung",
+};
 
-export function Result(){
- const{id}=useParams();
- const input=id?findAnalysis(id):undefined;
- if(!input)return <div className="empty-state"><h2>Analyse nicht gefunden</h2><Link className="button primary" to="/analyse">Neue Analyse</Link></div>;
- const r=calculateAnalysis(input); const m=r.marketAnalysis; const l=r.locationAnalysis; const color=scoreColor(r.score);
- const optimalPrice=m.estimatedMarketValue*.93; const veryAttractive=m.estimatedMarketValue*.86;
- return <div className="page-stack result-page">
-  <div className="result-actions"><Link className="text-link" to="/analysen"><ArrowLeft size={17}/>Analysen</Link><button className="button secondary" onClick={()=>window.print()}><Download size={17}/>PDF exportieren</button></div>
-  <article className="pdf-sheet">
-   <header className="pdf-header"><div><span className="eyebrow">HOMEIQ INVEST · ANALYSE-BERICHT {new Date(input.createdAt).toLocaleDateString("de-CH")}</span><h1>{input.title}</h1><p>{input.street} {input.postalCode} {input.city}</p></div><div className="pdf-score" style={{borderColor:color,boxShadow:`inset 0 0 0 7px color-mix(in srgb, ${color} 22%, white)`}}><strong style={{color}}>{r.score}</strong><span>HOMEIQ SCORE / 100</span><small>{r.rating}</small></div></header>
-   <div className="pdf-recommendation" style={{borderLeftColor:color}}><strong>{r.recommendation.toUpperCase()}</strong><span>{r.rating}</span></div>
-   <section className="pdf-kpis"><h2>KENNZAHLEN & FINANZIERUNG</h2><div>{[["Bruttorendite",percent(r.grossYield)],["Nettorendite",percent(r.netYield)],["Eigenkapitalrendite",percent(r.equityReturn)],["Cashflow / Monat",money(r.monthlyCashflow)],["Cashflow / Jahr",money(r.annualCashflow)],["Belehnung (LTV)",percent(r.ltv)],["Preis / m²",money(r.pricePerSqm)],["Kaufpreis",money(input.purchasePrice)],["Eigenkapital",money(input.equity)],["Hypothek",money(r.mortgage)],["Zinssatz",percent(input.interestRate)],["Investition total",money(r.totalInvestment)]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div></section>
-   <div className="pdf-main-grid">
-    <section className="pdf-block score-block"><h2>HOMEIQ SCORE - AUFSCHLÜSSELUNG</h2>{Object.entries(r.scoreBreakdown).map(([key,val])=><div className="pdf-score-row" key={key}><div><strong>{factorLabels[key as keyof typeof factorLabels]}</strong><small>Gewicht {factorWeights[key as keyof typeof factorWeights]}</small></div><div className="bar"><i style={{width:`${val}%`,background:scoreColor(Number(val))}}/></div><b>{val}/100</b></div>)}</section>
-    <section className="pdf-block premium-block"><h2>PREMIUM-MARKTANALYSE</h2><div className="premium-columns"><div><span>OPTIMALER KAUFPREIS</span><strong>{money(m.estimatedMarketValue)}</strong><small>Marktwertspanne {money(m.marketValueLow)} - {money(m.marketValueHigh)}</small><small>Attraktiver Kaufpreis {money(optimalPrice)}</small><small>Sehr attraktiver Kaufpreis {money(veryAttractive)}</small><small>Eingegebener Kaufpreis {money(input.purchasePrice)}</small><b className={m.priceDifference>=0?"positive-text":"negative-text"}>{m.priceRating}: {percent(m.priceDifferencePercent)}</b></div><div><span>MARKTMIETE</span><strong>{money(m.estimatedMonthlyMarketRent)} / Monat</strong><small>Benchmark {money(m.benchmarkRentPerSqm)} / m²</small><small>Eingegebene Nettomiete {money(m.currentMonthlyRent)} / Monat</small><small>Abweichung {percent(m.rentDifferencePercent)}</small><b className={m.rentDifferenceMonthly>=0?"positive-text":"negative-text"}>{m.rentRating}</b></div></div>{m.units.length>0&&<table className="pdf-units"><thead><tr><th>Wohnung</th><th>Ist</th><th>Markt</th><th>Diff.</th></tr></thead><tbody>{m.units.map(u=><tr key={u.id}><td>{u.label} · {u.rooms} Zi. · {number(u.livingArea)} m²</td><td>{money(u.currentMonthlyRent)}</td><td>{money(u.estimatedMonthlyMarketRent)}</td><td>{signedMoney(u.differenceMonthly)}</td></tr>)}</tbody></table>}</section>
-    <section className="pdf-block conclusion-block"><h2>KURZFAZIT</h2><p>Das Objekt präsentiert sich als <strong>{r.rating.toLowerCase()}</strong>. Es kombiniert eine Nettorendite von <strong>{percent(r.netYield)}</strong>, einen monatlichen Cashflow von <strong>{money(r.monthlyCashflow)}</strong> und eine Eigenkapitalrendite von <strong>{percent(r.equityReturn)}</strong>. Der geschätzte Marktwert beträgt <strong>{money(m.estimatedMarketValue)}</strong>.</p><strong>Empfehlung: {r.recommendation}</strong><div className="pros-cons compact"><div><h3>POSITIV</h3>{r.positives.length?r.positives.slice(0,4).map(x=><p key={x}>· {x}</p>):<p>-</p>}</div><div><h3>NEGATIV</h3>{r.negatives.length?r.negatives.slice(0,4).map(x=><p key={x}>· {x}</p>):<p>-</p>}</div></div></section>
-    <section className="pdf-block object-block"><h2>OBJEKTDATEN</h2><div className="object-data">{[["Objekttyp",input.propertyType],["Baujahr",input.yearBuilt],["Letzte Renovation",input.renovatedYear||"-"],["Wohnfläche",`${number(input.livingArea)} m²`],["Zimmer",input.propertyType==="mfh"?`${input.rentalUnits.length} Wohnungen`:input.rooms],["Badezimmer",input.bathrooms],["Stockwerk",input.floor],["Parkplätze",input.parkingSpaces],["Zustand",input.condition],["Ausstattung",input.features.join(", ")||"-"]].map(([label,value])=><div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div></section>
-    <section className="pdf-block location-block"><div className="block-title"><h2>LAGE</h2><span><MapPin size={13}/>{l.score}/100 · {l.rating}</span></div><div className="location-mini">{l.factors.map(f=><div key={f.label}><span>{f.label}</span><div className="bar"><i style={{width:`${f.score}%`,background:scoreColor(f.score)}}/></div><strong>{f.score}</strong></div>)}</div></section>
-   </div>
-   <footer className="pdf-footer">HomeIQ Invest · Executive Summary · Keine Anlage-, Steuer- oder Rechtsberatung. · Seite 1 / 1</footer>
-  </article>
- </div>;
+const factorWeights = {
+  netYield: "35 %",
+  equityReturn: "20 %",
+  location: "25 %",
+  condition: "12 %",
+  features: "8 %",
+};
+
+const signedMoney = (value: number) =>
+  `${value >= 0 ? "+ " : "− "}${money(Math.abs(value))}`;
+
+export function Result() {
+  const { id } = useParams();
+  const input = id ? findAnalysis(id) : undefined;
+
+  if (!input) {
+    return (
+      <div className="empty-state">
+        <h2>Analyse nicht gefunden</h2>
+        <Link className="button primary" to="/analyse">
+          Neue Analyse
+        </Link>
+      </div>
+    );
+  }
+
+  const result = calculateAnalysis(input);
+  const market = result.marketAnalysis;
+  const location = result.locationAnalysis;
+  const dynamicScoreColor = scoreColor(result.score);
+
+  const scoreStyle = {
+    borderColor: dynamicScoreColor,
+    boxShadow: `inset 0 0 0 1px rgba(255,255,255,.18), 0 0 0 4px ${dynamicScoreColor}22`,
+  };
+
+  return (
+    <div className="page-stack result-page">
+      <div className="result-actions">
+        <Link className="text-link" to="/analysen">
+          <ArrowLeft size={17} /> Analysen
+        </Link>
+        <button className="button secondary" onClick={() => window.print()}>
+          <Download size={17} /> PDF exportieren
+        </button>
+      </div>
+
+      <div className="screen-report">
+        <section className="result-hero report-cover">
+          <div>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2</span>
+            <h1>{input.title}</h1>
+            <p>
+              {input.street} · {input.postalCode} {input.city}
+            </p>
+            <span className="recommendation">{result.recommendation}</span>
+          </div>
+          <div className="result-score" style={scoreStyle}>
+            <strong>{result.score}</strong>
+            <span>/100</span>
+            <small>{result.rating}</small>
+          </div>
+        </section>
+
+        <section className="kpi-grid">
+          {[
+            ["Nettorendite", percent(result.netYield)],
+            ["Eigenkapitalrendite", percent(result.equityReturn)],
+            ["Cashflow / Monat", money(result.monthlyCashflow)],
+            ["Marktwert", money(market.estimatedMarketValue)],
+            ["Marktmiete / Monat", money(market.estimatedMonthlyMarketRent)],
+            ["Lage", `${location.score}/100`],
+          ].map(([label, value]) => (
+            <article className="kpi" key={label}>
+              <span>{label}</span>
+              <strong>{value}</strong>
+            </article>
+          ))}
+        </section>
+
+        <section className="two-column result-columns">
+          <article className="panel">
+            <span className="eyebrow">HOMEIQ SCORE</span>
+            <h2>Aufschlüsselung</h2>
+            <div className="score-list">
+              {Object.entries(result.scoreBreakdown).map(([key, value]) => (
+                <div key={key}>
+                  <div>
+                    <span>{factorLabels[key as keyof typeof factorLabels]}</span>
+                    <small>Gewicht {factorWeights[key as keyof typeof factorWeights]}</small>
+                  </div>
+                  <div className="bar">
+                    <i style={{ width: `${value}%`, background: scoreColor(value) }} />
+                  </div>
+                  <strong>{value}/100</strong>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="panel">
+            <span className="eyebrow">GESAMTBEURTEILUNG</span>
+            <h2>{result.rating}</h2>
+            <p>
+              Die Analyse kombiniert Rendite, Finanzierung, Lagequalität, Marktwert und
+              Marktmiete. Der geschätzte Marktwert liegt bei{" "}
+              <strong>{money(market.estimatedMarketValue)}</strong>; die aktuelle Miete
+              weicht um <strong>{percent(market.rentDifferencePercent)}</strong> vom
+              geschätzten Marktniveau ab.
+            </p>
+            <div className="pros-cons">
+              <div>
+                <h3>Positiv</h3>
+                {result.positives.length ? (
+                  result.positives.map((item) => <p key={item}>• {item}</p>)
+                ) : (
+                  <p>—</p>
+                )}
+              </div>
+              <div>
+                <h3>Risiken</h3>
+                {result.negatives.length ? (
+                  result.negatives.map((item) => <p key={item}>• {item}</p>)
+                ) : (
+                  <p>—</p>
+                )}
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section className="panel report-section">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">MARKTPREISANALYSE</span>
+              <h2>Marktwert und Kaufpreis</h2>
+            </div>
+            <TrendingUp size={24} />
+          </div>
+          <div className="market-summary">
+            <div className="market-highlight">
+              <span>Geschätzter Marktwert</span>
+              <strong>{money(market.estimatedMarketValue)}</strong>
+              <small>
+                Bandbreite {money(market.marketValueLow)} – {money(market.marketValueHigh)}
+              </small>
+            </div>
+            <div
+              className={`market-verdict ${market.priceDifference >= 0 ? "positive" : "negative"}`}
+            >
+              <span>{market.priceRating}</span>
+              <strong>{signedMoney(market.priceDifference)}</strong>
+              <small>{percent(market.priceDifferencePercent)} gegenüber Kaufpreis</small>
+            </div>
+          </div>
+          <div className="detail-grid">
+            <div>
+              <span>Regionaler Benchmark</span>
+              <strong>{money(market.benchmarkPricePerSqm)} / m²</strong>
+            </div>
+            <div>
+              <span>Angepasster Objektwert</span>
+              <strong>{money(market.adjustedPricePerSqm)} / m²</strong>
+            </div>
+            <div>
+              <span>Kaufpreis / m²</span>
+              <strong>{money(result.pricePerSqm)} / m²</strong>
+            </div>
+            <div>
+              <span>Datenradius</span>
+              <strong>{input.marketDataRadiusKm} km</strong>
+            </div>
+            <div>
+              <span>Modellsicherheit</span>
+              <strong className="capitalize">{market.confidence}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel report-section">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">MARKTMIETANALYSE</span>
+              <h2>Ist-Miete und Mietpotenzial</h2>
+            </div>
+            <TrendingUp size={24} />
+          </div>
+          <div className="market-summary">
+            <div className="market-highlight">
+              <span>Geschätzte Marktmiete / Monat</span>
+              <strong>{money(market.estimatedMonthlyMarketRent)}</strong>
+              <small>Benchmark {money(market.benchmarkRentPerSqm)} / m²</small>
+            </div>
+            <div
+              className={`market-verdict ${market.rentDifferenceMonthly >= 0 ? "positive" : "negative"}`}
+            >
+              <span>{market.rentRating}</span>
+              <strong>{signedMoney(market.rentDifferenceMonthly)} / Monat</strong>
+              <small>{percent(market.rentDifferencePercent)} zur aktuellen Miete</small>
+            </div>
+          </div>
+          {market.units.length > 0 && (
+            <div className="table-wrap">
+              <table className="market-table">
+                <thead>
+                  <tr>
+                    <th>Wohnung</th>
+                    <th>Zimmer</th>
+                    <th>Fläche</th>
+                    <th>Ist-Miete</th>
+                    <th>Marktmiete</th>
+                    <th>Differenz</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {market.units.map((unit) => (
+                    <tr key={unit.id}>
+                      <td>
+                        <strong>{unit.label}</strong>
+                        <small>{unit.floor}</small>
+                      </td>
+                      <td>{unit.rooms}</td>
+                      <td>{number(unit.livingArea)} m²</td>
+                      <td>{money(unit.currentMonthlyRent)}</td>
+                      <td>{money(unit.estimatedMonthlyMarketRent)}</td>
+                      <td
+                        className={
+                          unit.differenceMonthly >= 0 ? "positive-text" : "negative-text"
+                        }
+                      >
+                        {signedMoney(unit.differenceMonthly)}
+                        <small>{percent(unit.differencePercent)}</small>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th colSpan={3}>Gesamt</th>
+                    <th>{money(market.currentMonthlyRent)}</th>
+                    <th>{money(market.estimatedMonthlyMarketRent)}</th>
+                    <th>{signedMoney(market.rentDifferenceMonthly)}</th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="panel report-section">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">LAGEANALYSE</span>
+              <h2>{location.rating}</h2>
+            </div>
+            <div className="location-badge">
+              <MapPin size={18} /> {location.score}/100
+            </div>
+          </div>
+          <div className="location-grid">
+            {location.factors.map((factor) => (
+              <div className="location-factor" key={factor.label}>
+                <div>
+                  <span>{factor.label}</span>
+                  <strong>{factor.score}/100</strong>
+                </div>
+                <div className="bar">
+                  <i
+                    style={{
+                      width: `${factor.score}%`,
+                      background: scoreColor(factor.score),
+                    }}
+                  />
+                </div>
+                <small>{factor.detail}</small>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="panel report-section">
+          <span className="eyebrow">KENNZAHLEN & FINANZIERUNG</span>
+          <div className="detail-grid">
+            {[
+              ["Kaufpreis", money(input.purchasePrice)],
+              ["Investition total", money(result.totalInvestment)],
+              ["Eigenkapital", money(input.equity)],
+              ["Hypothek", money(result.mortgage)],
+              ["Belehnung", percent(result.ltv)],
+              ["Zinskosten / Jahr", money(result.annualInterest)],
+              ["Amortisation / Jahr", money(result.annualAmortization)],
+              ["Jahresmietertrag", money(result.annualRent)],
+              ["Bruttorendite", percent(result.grossYield)],
+              ["Wohnfläche", `${number(input.livingArea)} m²`],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <footer className="report-footer">
+          <strong>HomeIQ Invest</strong>
+          <span>Erstellt am {new Date(input.createdAt).toLocaleDateString("de-CH")}</span>
+        </footer>
+        <p className="disclaimer">
+          Modellbasierte Schätzung auf Grundlage der eingegebenen Benchmarks. Keine
+          Anlage-, Steuer-, Rechts- oder Verkehrswertberatung.
+        </p>
+      </div>
+
+      <article className="print-report">
+        <header className="print-header">
+          <div>
+            <span>HOMEIQ INVEST · ANALYSE-BERICHT</span>
+            <h1>{input.title}</h1>
+            <p>
+              {input.street} {input.postalCode} {input.city}
+            </p>
+          </div>
+          <div className="print-score" style={{ borderColor: dynamicScoreColor }}>
+            <strong>{result.score}</strong>
+            <span>HOMEIQ SCORE / 100</span>
+            <small>{result.rating}</small>
+          </div>
+        </header>
+
+        <div className="print-recommendation">{result.recommendation}</div>
+
+        <section className="print-section print-finance">
+          <h2>KENNZAHLEN & FINANZIERUNG</h2>
+          <div className="print-metrics">
+            {[
+              ["Bruttorendite", percent(result.grossYield)],
+              ["Nettorendite", percent(result.netYield)],
+              ["Eigenkapitalrendite", percent(result.equityReturn)],
+              ["Cashflow / Monat", money(result.monthlyCashflow)],
+              ["Cashflow / Jahr", money(result.annualCashflow)],
+              ["Belehnung (LTV)", percent(result.ltv)],
+              ["Preis / m²", money(result.pricePerSqm)],
+              ["Kaufpreis", money(input.purchasePrice)],
+              ["Eigenkapital", money(input.equity)],
+              ["Hypothek", money(result.mortgage)],
+              ["Zinssatz", percent(input.interestRate)],
+              ["Investition total", money(result.totalInvestment)],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="print-section">
+          <h2>HOMEIQ SCORE — AUFSCHLÜSSELUNG</h2>
+          <div className="print-score-breakdown">
+            {Object.entries(result.scoreBreakdown).map(([key, value]) => (
+              <div key={key}>
+                <span>{factorLabels[key as keyof typeof factorLabels]}</span>
+                <small>Gewicht {factorWeights[key as keyof typeof factorWeights]}</small>
+                <i style={{ width: `${value}%`, background: scoreColor(value) }} />
+                <strong>{value}/100</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="print-section print-market">
+          <h2>PREMIUM-MARKTANALYSE</h2>
+          <div className="print-market-columns">
+            <div>
+              <span>OPTIMALER KAUFPREIS</span>
+              <h3>{money(market.estimatedMarketValue)}</h3>
+              <p>
+                Marktwertspanne {money(market.marketValueLow)} – {money(market.marketValueHigh)}
+              </p>
+              <p>
+                Eingabe {money(input.purchasePrice)} · Abweichung {percent(market.priceDifferencePercent)}
+              </p>
+            </div>
+            <div>
+              <span>MARKTMIETE</span>
+              <h3>{money(market.estimatedMonthlyMarketRent)} / Monat</h3>
+              <p>Benchmark {money(market.benchmarkRentPerSqm)} / m²</p>
+              <p>
+                Ist-Miete {money(market.currentMonthlyRent)} · Abweichung {percent(market.rentDifferencePercent)}
+              </p>
+            </div>
+          </div>
+          {market.units.length > 0 && (
+            <table className="print-unit-table">
+              <thead>
+                <tr>
+                  <th>Wohnung</th>
+                  <th>m²</th>
+                  <th>Ist</th>
+                  <th>Markt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {market.units.slice(0, 8).map((unit) => (
+                  <tr key={unit.id}>
+                    <td>{unit.label}</td>
+                    <td>{number(unit.livingArea)}</td>
+                    <td>{money(unit.currentMonthlyRent)}</td>
+                    <td>{money(unit.estimatedMonthlyMarketRent)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
+
+        <section className="print-section print-bottom-grid">
+          <div>
+            <h2>KURZFAZIT</h2>
+            <p>
+              {result.rating}. Nettorendite {percent(result.netYield)}, monatlicher Cashflow{" "}
+              {money(result.monthlyCashflow)} und Eigenkapitalrendite{" "}
+              {percent(result.equityReturn)}.
+            </p>
+            <strong>{result.recommendation}</strong>
+            <div className="print-pros-cons">
+              <div>
+                <span>POSITIV</span>
+                {result.positives.slice(0, 3).map((item) => (
+                  <p key={item}>· {item}</p>
+                ))}
+              </div>
+              <div>
+                <span>NEGATIV</span>
+                {(result.negatives.length ? result.negatives : ["—"])
+                  .slice(0, 3)
+                  .map((item) => <p key={item}>· {item}</p>)}
+              </div>
+            </div>
+          </div>
+          <div>
+            <h2>OBJEKTDATEN</h2>
+            <p>Objekttyp {input.propertyType}</p>
+            <p>Baujahr {input.yearBuilt || "—"}</p>
+            <p>Letzte Renovation {input.renovatedYear || "—"}</p>
+            <p>Wohnfläche {number(input.livingArea)} m²</p>
+            <p>Zimmer {input.rooms || "—"}</p>
+            <p>Parkplätze {input.parkingSpaces}</p>
+            <p>Ausstattung {input.features.join(", ") || "—"}</p>
+          </div>
+          <div>
+            <h2>LAGE</h2>
+            <div className="print-location-score">{location.score}/100 · {location.rating}</div>
+            {location.factors.slice(0, 5).map((factor) => (
+              <p key={factor.label}>
+                {factor.label}: {factor.score}/100
+              </p>
+            ))}
+          </div>
+        </section>
+
+        <footer className="print-footer">
+          HomeIQ Invest · Executive Summary · Keine Anlage-, Steuer- oder Rechtsberatung.
+          <span>Seite 1 / 1</span>
+        </footer>
+      </article>
+    </div>
+  );
 }
