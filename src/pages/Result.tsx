@@ -7,7 +7,7 @@ import { findAnalysis } from "../lib/storage";
 import { money, number, percent } from "../lib/format";
 import { scoreColor } from "../lib/scoreColor";
 import { HomeIQScoreCard } from "../components/HomeIQScoreCard";
-import { GoogleMapCard } from "../components/GoogleMapCard";
+import { OpenStreetMapCard } from "../components/OpenStreetMapCard";
 import homeIqLogo from "../assets/homeiq-logo.jpg";
 
 const factorLabels = {
@@ -55,6 +55,24 @@ export function Result() {
     if (!element) return;
     element.classList.add("pdf-capture");
     try {
+      const startedAt = Date.now();
+      while (
+        element.querySelector('[data-map-ready="false"]') &&
+        Date.now() - startedAt < 6000
+      ) {
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
+      const mapImages = Array.from(element.querySelectorAll<HTMLImageElement>(".osm-map-card img"));
+      await Promise.all(
+        mapImages.map((image) =>
+          image.complete
+            ? Promise.resolve()
+            : new Promise<void>((resolve) => {
+                image.addEventListener("load", () => resolve(), { once: true });
+                image.addEventListener("error", () => resolve(), { once: true });
+              }),
+        ),
+      );
       const canvas = await html2canvas(element, {
         scale: 2,
         backgroundColor: "#ffffff",
@@ -327,7 +345,7 @@ export function Result() {
               </div>
               <MapPin size={22} />
             </div>
-            <GoogleMapCard street={input.street} postalCode={input.postalCode} city={input.city} />
+            <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} />
           </div>
         </section>
 
@@ -500,7 +518,7 @@ export function Result() {
           <div className="print-location-column">
             <h2>LAGE</h2>
             <div className="print-location-score">{location.score}/100 · {location.rating}</div>
-            <GoogleMapCard street={input.street} postalCode={input.postalCode} city={input.city} print />
+            <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} print />
             {location.factors.slice(0, 3).map((factor) => (
               <p key={factor.label}>
                 {factor.label}: {factor.score}/100
