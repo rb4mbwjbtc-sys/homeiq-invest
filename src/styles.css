@@ -213,3 +213,59 @@ html, body, button, input, select, textarea, table { font-family: Inter, ui-sans
 .result-hero .homeiq-score-card{min-width:260px;box-shadow:none;background:rgba(2,45,38,.45);border:1px solid rgba(255,255,255,.12)}
 .print-brand{display:flex;align-items:center;gap:7px}.print-brand img{width:22px;height:22px;border-radius:6px;object-fit:cover}.print-header .homeiq-score-card.print-mode{min-width:0;width:150px;height:150px;padding:9px;border-radius:18px;box-shadow:none;gap:4px}.print-header .homeiq-score-card.print-mode .homeiq-score-ring{width:96px;height:96px;padding:6px}.print-header .homeiq-score-card.print-mode .homeiq-score-ring-inner img{width:20px;height:20px}.print-header .homeiq-score-card.print-mode .homeiq-score-ring strong{font-size:31px}.print-header .homeiq-score-card.print-mode .homeiq-score-ring span{font-size:9px}.print-header .homeiq-score-card.print-mode .homeiq-score-title{font-size:6px;letter-spacing:.12em}.print-header .homeiq-score-card.print-mode .homeiq-score-title i{width:15px}.print-header .homeiq-score-card.print-mode .homeiq-score-rating{font-size:7px;padding:3px 5px;gap:4px}.print-header .homeiq-score-card.print-mode .homeiq-score-rating b{width:5px;height:5px}
 @media(max-width:700px){.homeiq-score-card{min-width:0;width:100%}.homeiq-score-factors{grid-template-columns:repeat(2,1fr);gap:14px}.homeiq-score-factors div{border:0}}
+
+/* HomeIQ v2.5 – Scorekarte nach freigegebenem Referenzdesign */
+.homeiq-score-card{
+  width:min(100%,680px);min-width:0;padding:34px 34px 28px;border-radius:34px;
+  background:radial-gradient(circle at 50% 22%,#0d5a50 0%,#063f38 58%,#04332e 100%);
+  color:#fff;display:grid;justify-items:center;gap:15px;overflow:hidden;
+  box-shadow:0 25px 55px rgba(3,44,38,.24);border:1px solid rgba(206,245,228,.12)
+}
+.homeiq-score-card.compact{width:min(100%,520px);padding:22px 24px 20px;border-radius:26px;gap:9px}
+.homeiq-score-gauge{position:relative;width:330px;height:330px;display:grid;place-items:center}
+.homeiq-score-card.compact .homeiq-score-gauge{width:210px;height:210px}
+.homeiq-score-gauge svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);filter:drop-shadow(0 7px 18px rgba(0,0,0,.18))}
+.homeiq-score-gauge circle{fill:none;stroke-width:13;stroke-linecap:round}
+.homeiq-score-gauge .score-track{stroke:rgba(178,228,207,.22)}
+.homeiq-score-gauge .score-progress{transition:stroke-dasharray .5s ease;filter:drop-shadow(0 0 7px rgba(192,239,219,.28))}
+.homeiq-score-center{position:relative;z-index:1;display:grid;justify-items:center;align-content:center;text-align:center}
+.homeiq-score-house{width:62px;height:62px;color:#eafcf4;stroke-width:1.7;filter:drop-shadow(0 4px 8px rgba(0,0,0,.22));margin-bottom:4px}
+.homeiq-score-card.compact .homeiq-score-house{width:36px;height:36px}
+.homeiq-score-center strong{font-size:104px;line-height:.86;letter-spacing:-.07em;color:#fff;text-shadow:0 5px 12px rgba(0,0,0,.2)}
+.homeiq-score-card.compact .homeiq-score-center strong{font-size:66px}
+.homeiq-score-center span{margin-top:14px;color:#c7ddd6;font-size:28px;font-weight:400}
+.homeiq-score-card.compact .homeiq-score-center span{font-size:17px;margin-top:8px}
+.homeiq-score-title{display:flex;align-items:center;justify-content:center;gap:25px;width:100%;color:#bce7d3;font-size:22px;letter-spacing:.27em;font-weight:800}
+.homeiq-score-title i{display:block;width:100px;height:2px;background:linear-gradient(90deg,transparent,#9bd8bf)}
+.homeiq-score-title i:last-child{background:linear-gradient(90deg,#9bd8bf,transparent)}
+.homeiq-score-card.compact .homeiq-score-title{font-size:13px;gap:13px}.homeiq-score-card.compact .homeiq-score-title i{width:55px}
+.homeiq-score-rating{display:flex;align-items:center;justify-content:center;gap:12px;max-width:90%;padding:11px 22px;border:1px solid rgba(190,234,216,.22);border-radius:999px;font-size:18px;font-weight:650;background:rgba(6,55,49,.28)}
+.homeiq-score-rating b{width:12px;height:12px;border-radius:50%;flex:0 0 auto}
+.homeiq-score-card.compact .homeiq-score-rating{font-size:12px;padding:7px 13px;gap:8px}.homeiq-score-card.compact .homeiq-score-rating b{width:8px;height:8px}
+.homeiq-score-factors{width:100%;display:grid;grid-template-columns:repeat(5,1fr);margin-top:12px;padding-top:22px;border-top:1px solid rgba(203,239,224,.12)}
+.homeiq-score-factors>div{min-width:0;display:grid;justify-items:center;align-content:start;gap:10px;padding:0 12px;text-align:center;border-right:1px solid rgba(204,239,225,.13)}
+.homeiq-score-factors>div:last-child{border-right:0}.homeiq-score-factors svg{width:51px;height:51px;color:#c8eddc;stroke-width:1.45}
+.homeiq-score-factors>div>span{font-size:15px;line-height:1.18;color:#f5fffb}.homeiq-score-factors>div>span>span{display:inline}
+.homeiq-score-card.compact .homeiq-score-factors{margin-top:7px;padding-top:13px}.homeiq-score-card.compact .homeiq-score-factors>div{gap:6px;padding:0 6px}.homeiq-score-card.compact .homeiq-score-factors svg{width:28px;height:28px}.homeiq-score-card.compact .homeiq-score-factors>div>span{font-size:9px}
+.result-hero .homeiq-score-card{background:radial-gradient(circle at 50% 22%,#0d5a50 0%,#063f38 58%,#04332e 100%);border-color:rgba(206,245,228,.12)}
+
+/* Google Maps */
+.analysis-map-block{margin-top:24px;padding-top:22px;border-top:1px solid var(--line)}
+.map-heading{margin-bottom:12px}.google-map-card{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:18px;background:#eef4f1;box-shadow:0 10px 28px rgba(16,58,49,.08)}
+.google-map-card iframe{display:block;width:100%;height:390px;border:0}.map-open-link{display:flex;align-items:center;gap:7px;padding:11px 14px;background:#fff;color:var(--green);font-weight:750;font-size:13px;border-top:1px solid var(--line)}
+.print-google-map{height:72px;border-radius:5px;box-shadow:none}.print-google-map img{width:100%;height:100%;object-fit:cover;display:block}.map-print-fallback{height:100%;display:grid;place-content:center;justify-items:center;text-align:center;padding:7px;background:linear-gradient(135deg,#eaf4f0,#f8fbfa);color:#0b5d4b}.map-print-fallback strong{font-size:8px}.map-print-fallback span{font-size:6px;color:#657a73;max-width:160px}
+
+/* PDF score card – gleiches Layout, proportional verkleinert */
+.print-header .homeiq-score-card.print-mode{width:190px;height:205px;padding:10px 12px 9px;border-radius:16px;gap:4px}
+.print-header .homeiq-score-card.print-mode .homeiq-score-gauge{width:92px;height:92px}
+.print-header .homeiq-score-card.print-mode .homeiq-score-gauge circle{stroke-width:12}
+.print-header .homeiq-score-card.print-mode .homeiq-score-house{width:18px;height:18px;margin-bottom:1px}
+.print-header .homeiq-score-card.print-mode .homeiq-score-center strong{font-size:33px}
+.print-header .homeiq-score-card.print-mode .homeiq-score-center span{font-size:8px;margin-top:3px}
+.print-header .homeiq-score-card.print-mode .homeiq-score-title{font-size:6px;gap:5px;letter-spacing:.16em}.print-header .homeiq-score-card.print-mode .homeiq-score-title i{width:22px;height:1px}
+.print-header .homeiq-score-card.print-mode .homeiq-score-rating{font-size:6px;padding:3px 6px;gap:3px}.print-header .homeiq-score-card.print-mode .homeiq-score-rating b{width:4px;height:4px}
+.print-header .homeiq-score-card.print-mode .homeiq-score-factors{padding-top:5px;margin-top:2px}.print-header .homeiq-score-card.print-mode .homeiq-score-factors>div{padding:0 2px;gap:2px}.print-header .homeiq-score-card.print-mode .homeiq-score-factors svg{width:12px;height:12px}.print-header .homeiq-score-card.print-mode .homeiq-score-factors>div>span{font-size:4.5px;line-height:1.05}
+.print-location-column .google-map-card{margin:4px 0}.print-report.pdf-capture .print-header{grid-template-columns:1fr 205px}.print-report.pdf-capture .print-header .homeiq-score-card.print-mode{width:190px;height:205px}.print-report.pdf-capture .print-google-map{height:76px}
+
+@media(max-width:900px){.homeiq-score-card{padding:26px 18px}.homeiq-score-gauge{width:260px;height:260px}.homeiq-score-center strong{font-size:82px}.homeiq-score-factors>div{padding:0 6px}.homeiq-score-factors svg{width:36px;height:36px}.homeiq-score-factors>div>span{font-size:12px}}
+@media(max-width:600px){.homeiq-score-card.compact{width:100%}.homeiq-score-factors{grid-template-columns:repeat(5,1fr);gap:0}.homeiq-score-factors>div{border-right:1px solid rgba(204,239,225,.13)}.homeiq-score-factors>div:last-child{border-right:0}.google-map-card iframe{height:300px}}

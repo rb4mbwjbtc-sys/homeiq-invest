@@ -1,53 +1,34 @@
-# HomeIQ Independent v2
+# HomeIQ Independent v2.5
 
-Unabhängige HomeIQ-Version mit beibehaltenem Design.
+V2.5 basiert auf V2.4 und enthält:
 
-## Neu in V2
+- HomeIQ Scorekarte nach dem freigegebenen Referenzdesign
+- Scorekarte in Dashboard, Ergebnisansicht und PDF
+- Google-Maps-Kartenausschnitt mit Objekt-Pin in der Lageanalyse
+- Google-Maps-Kartenausschnitt im PDF bei hinterlegtem API-Key
+- bestehende Berechnungs-, Markt-, Speicher- und PDF-Funktionen aus V2.4
 
-- Transparente Lageanalyse mit acht Faktoren
-- Marktwertschätzung mit regionalem CHF/m²-Benchmark
-- Marktmietschätzung
-- Beim Mehrfamilienhaus: Marktmiete für jede Wohnung separat
-- Marktwert- und Mietpreisbandbreiten
-- PDF-/Druckbericht im HomeIQ-App-Design
-- Datenradius bis maximal 10 km
-
-## Wichtiger Hinweis
-
-V2 verwendet vom Benutzer eingegebene regionale Benchmarks und ein transparentes Rechenmodell. Es werden noch keine Live-Daten eines externen Immobilien-Datenanbieters abgerufen.
-
-## Start
+## Entwicklung
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Build
+## Produktions-Build
 
 ```bash
 npm run build
 ```
 
-## V2.4 – angeforderte Anpassungen
+## Google Maps
 
-- Standort- und Marktdaten bleiben leer, bis «Laden» angeklickt wird.
-- Marktwert-Aktion direkt im Bereich Finanzierung unter dem Kaufpreis.
-- Marktmiet-Aktion direkt unter der Nettomiete; beim MFH aggregiert aus den einzelnen Wohnungen.
-- Score-Ring und Bewertungsbalken mit kontinuierlicher Farblogik von Rot bis Grün.
-- Separates, kompaktes A4-Einseitenlayout für den PDF-/Druckexport im HomeIQ-Design.
+Der Google-Maps-Kartenausschnitt in der App wird anhand der eingegebenen Adresse erzeugt.
 
+Damit der Kartenausschnitt auch im erzeugten PDF erscheint, muss in Vercel folgende Environment Variable hinterlegt werden:
 
-## V2.4 Änderungen
-- Standortdaten-Lader auf Seite Lage & Markt verschoben
-- Marktwert- und Marktmietresultate im erweiterten HomeIQ-Layout
-- Marktmiete automatisch berechnen
-- Dynamische Eigenkapitalquote / Finanzierungsbeurteilung
+```text
+VITE_GOOGLE_MAPS_API_KEY=<Google Maps API Key>
+```
 
-
-## V2.4
-- Neues HomeIQ-Logo in Navigation und PDF
-- Dynamisches Score-Design im HomeIQ-Look
-- Score-Faktoren: Nettorendite 35 %, Eigenkapitalrendite 20 %, Lage 25 %, Objektqualität 12 %, Marktfähigkeit 8 %
-- Objektqualität berücksichtigt Zustand, Baujahr, Renovation und Ausbaustandard
-- Marktfähigkeit berücksichtigt Vermietbarkeit, Nachfrage, Leerstand und relevante Ausstattungsmerkmale
+Für diesen Schlüssel muss die **Maps Static API** im Google-Cloud-Projekt aktiviert sein. Der Schlüssel sollte auf die produktive HomeIQ-Domain eingeschränkt werden.

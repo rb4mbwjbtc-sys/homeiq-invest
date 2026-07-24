@@ -7,6 +7,7 @@ import { findAnalysis } from "../lib/storage";
 import { money, number, percent } from "../lib/format";
 import { scoreColor } from "../lib/scoreColor";
 import { HomeIQScoreCard } from "../components/HomeIQScoreCard";
+import { GoogleMapCard } from "../components/GoogleMapCard";
 import homeIqLogo from "../assets/homeiq-logo.jpg";
 
 const factorLabels = {
@@ -94,7 +95,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2.4</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2.5</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -318,6 +319,16 @@ export function Result() {
               </div>
             ))}
           </div>
+          <div className="analysis-map-block">
+            <div className="section-heading map-heading">
+              <div>
+                <span className="eyebrow">GOOGLE MAPS</span>
+                <h3>Standort der Immobilie</h3>
+              </div>
+              <MapPin size={22} />
+            </div>
+            <GoogleMapCard street={input.street} postalCode={input.postalCode} city={input.city} />
+          </div>
         </section>
 
         <section className="panel report-section">
@@ -486,10 +497,11 @@ export function Result() {
             <p>Parkplätze {input.parkingSpaces}</p>
             <p>Ausstattung {input.features.join(", ") || "—"}</p>
           </div>
-          <div>
+          <div className="print-location-column">
             <h2>LAGE</h2>
             <div className="print-location-score">{location.score}/100 · {location.rating}</div>
-            {location.factors.slice(0, 5).map((factor) => (
+            <GoogleMapCard street={input.street} postalCode={input.postalCode} city={input.city} print />
+            {location.factors.slice(0, 3).map((factor) => (
               <p key={factor.label}>
                 {factor.label}: {factor.score}/100
               </p>
