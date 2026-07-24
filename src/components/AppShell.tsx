@@ -1,4 +1,5 @@
-import { BarChart3, Building2, Home, Menu, PlusCircle, Settings, Sparkles, X } from "lucide-react";
+import { BarChart3, Home, Menu, PlusCircle, Settings, Sparkles, X } from "lucide-react";
+import homeIqLogo from "../assets/homeiq-logo.jpg";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
@@ -16,7 +17,7 @@ export function AppShell() {
     <div className="app-shell">
       <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark"><Building2 size={22} /></div>
+          <div className="brand-mark"><img src={homeIqLogo} alt="HomeIQ Invest" /></div>
           <div>
             <strong>HomeIQ</strong>
             <span>Invest</span>

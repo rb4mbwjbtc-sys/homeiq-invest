@@ -6,21 +6,23 @@ import { calculateAnalysis } from "../lib/calculations";
 import { findAnalysis } from "../lib/storage";
 import { money, number, percent } from "../lib/format";
 import { scoreColor } from "../lib/scoreColor";
+import { HomeIQScoreCard } from "../components/HomeIQScoreCard";
+import homeIqLogo from "../assets/homeiq-logo.jpg";
 
 const factorLabels = {
   netYield: "Nettorendite",
   equityReturn: "Eigenkapitalrendite",
   location: "Lagequalität",
-  condition: "Zustand",
-  features: "Ausstattung",
+  objectQuality: "Objektqualität",
+  marketability: "Marktfähigkeit",
 };
 
 const factorWeights = {
   netYield: "35 %",
   equityReturn: "20 %",
   location: "25 %",
-  condition: "12 %",
-  features: "8 %",
+  objectQuality: "12 %",
+  marketability: "8 %",
 };
 
 const signedMoney = (value: number) =>
@@ -92,18 +94,14 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2.3</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2.4</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
             </p>
             <span className="recommendation">{result.recommendation}</span>
           </div>
-          <div className="result-score" style={scoreStyle}>
-            <strong>{result.score}</strong>
-            <span>/100</span>
-            <small>{result.rating}</small>
-          </div>
+          <HomeIQScoreCard score={result.score} rating={result.rating} compact />
         </section>
 
         <section className="kpi-grid">
@@ -131,7 +129,7 @@ export function Result() {
                 <div key={key}>
                   <div>
                     <span>{factorLabels[key as keyof typeof factorLabels]}</span>
-                    <small>Gewicht {factorWeights[key as keyof typeof factorWeights]}</small>
+                    <small>Gewicht {factorWeights[key as keyof typeof factorWeights]} · {key === "objectQuality" ? "Baujahr, Sanierungen, Zustand und Standard" : key === "marketability" ? "Vermietbarkeit, Nachfrage, Grundriss und Ausstattung" : key === "location" ? "Mikrolage, ÖV, Einkauf, Leerstand und Lärm" : key === "netYield" ? "Miete abzüglich Betrieb und Unterhalt" : "Cashflow im Verhältnis zum Eigenkapital"}</small>
                   </div>
                   <div className="bar">
                     <i style={{ width: `${value}%`, background: scoreColor(value) }} />
@@ -358,17 +356,13 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <span>HOMEIQ INVEST · ANALYSE-BERICHT</span>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT</span></div>
             <h1>{input.title}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
             </p>
           </div>
-          <div className="print-score" style={{ borderColor: dynamicScoreColor }}>
-            <strong>{result.score}</strong>
-            <span>HOMEIQ SCORE / 100</span>
-            <small>{result.rating}</small>
-          </div>
+          <HomeIQScoreCard score={result.score} rating={result.rating} compact print />
         </header>
 
         <div className="print-recommendation">{result.recommendation}</div>

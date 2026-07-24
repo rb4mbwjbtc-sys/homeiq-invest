@@ -67,8 +67,8 @@ export type ScoreBreakdown = {
   netYield: number;
   equityReturn: number;
   location: number;
-  condition: number;
-  features: number;
+  objectQuality: number;
+  marketability: number;
 };
 
 export type LocationFactor = { label: string; score: number; detail: string };
