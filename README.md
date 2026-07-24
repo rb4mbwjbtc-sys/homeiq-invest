@@ -1,31 +1,30 @@
-# HomeIQ Independent – Core v1
+# HomeIQ Independent v2
 
-Eigenständige, Lovable-unabhängige HomeIQ-Kernversion.
+Unabhängige HomeIQ-Version mit beibehaltenem Design.
 
-## Funktionen
-- React + TypeScript + Vite
-- Responsive HomeIQ-Oberfläche
-- Alle fünf Immobilientypen
-- Mehrstufiges Analyseformular
-- Berechnungen für Brutto-/Nettorendite, Cashflow, Eigenkapitalrendite, Belehnung und Preis/m²
-- HomeIQ Score: Nettorendite 35 %, Eigenkapitalrendite 20 %, Lage 25 %, Zustand 12 %, Ausstattung 8 %
-- Ergebnisbericht
-- PDF-Export über Browserdruck
-- Lokale Speicherung im Browser
-- Keine Lovable-, Supabase- oder OpenAI-Abhängigkeit
+## Neu in V2
+
+- Transparente Lageanalyse mit acht Faktoren
+- Marktwertschätzung mit regionalem CHF/m²-Benchmark
+- Marktmietschätzung
+- Beim Mehrfamilienhaus: Marktmiete für jede Wohnung separat
+- Marktwert- und Mietpreisbandbreiten
+- PDF-/Druckbericht im HomeIQ-App-Design
+- Datenradius bis maximal 10 km
+
+## Wichtiger Hinweis
+
+V2 verwendet vom Benutzer eingegebene regionale Benchmarks und ein transparentes Rechenmodell. Es werden noch keine Live-Daten eines externen Immobilien-Datenanbieters abgerufen.
 
 ## Start
+
 ```bash
 npm install
 npm run dev
 ```
 
 ## Build
+
 ```bash
 npm run build
 ```
-
-## Vercel
-Framework: Vite  
-Build command: `npm run build`  
-Output directory: `dist`
