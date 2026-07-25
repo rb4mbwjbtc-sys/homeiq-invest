@@ -196,6 +196,7 @@ export function NewAnalysis() {
       setForm((previous) => ({
         ...previous,
         location: report.metrics,
+        marketDataRadiusKm: Math.min(10, Math.max(previous.marketDataRadiusKm, report.evidence.searchRadiusKm || 1)),
         openDataLocation: {
           address: report.address,
           building: report.building,
@@ -276,7 +277,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V3.0</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V3.1</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit Lageanalyse, Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -653,15 +654,17 @@ export function NewAnalysis() {
                   <div className="open-data-evidence-grid">
                     <div><span>ÖV-Güteklasse</span><strong>{form.openDataLocation.evidence.transitClass || "nicht verfügbar"}</strong></div>
                     <div><span>Leerwohnungsziffer</span><strong>{form.openDataLocation.evidence.vacancyRate !== null ? `${form.openDataLocation.evidence.vacancyRate.toFixed(2)} %` : "nicht verfügbar"}</strong></div>
-                    <div><span>Nächster ÖV-Punkt</span><strong>{form.openDataLocation.evidence.nearestPublicTransportMeters !== null ? `${form.openDataLocation.evidence.nearestPublicTransportMeters} m` : "nicht verfügbar"}</strong></div>
-                    <div><span>Einkauf</span><strong>{form.openDataLocation.evidence.nearestShoppingMeters !== null ? `${form.openDataLocation.evidence.nearestShoppingMeters} m` : "nicht verfügbar"}</strong></div>
-                    <div><span>Schule / Betreuung</span><strong>{form.openDataLocation.evidence.nearestSchoolMeters !== null ? `${form.openDataLocation.evidence.nearestSchoolMeters} m` : "nicht verfügbar"}</strong></div>
+                    <div><span>Nächster ÖV-Punkt</span><strong>{form.openDataLocation.evidence.nearestPublicTransportMeters !== null ? `${form.openDataLocation.evidence.nearestPublicTransportMeters} m · Radius ${form.openDataLocation.evidence.categoryRadiusKm?.transit || 1} km` : "nicht verfügbar"}</strong></div>
+                    <div><span>Einkauf</span><strong>{form.openDataLocation.evidence.nearestShoppingMeters !== null ? `${form.openDataLocation.evidence.nearestShoppingMeters} m · Radius ${form.openDataLocation.evidence.categoryRadiusKm?.shopping || 1} km` : "nicht verfügbar"}</strong></div>
+                    <div><span>Schule / Betreuung</span><strong>{form.openDataLocation.evidence.nearestSchoolMeters !== null ? `${form.openDataLocation.evidence.nearestSchoolMeters} m · Radius ${form.openDataLocation.evidence.categoryRadiusKm?.school || 1} km` : "nicht verfügbar"}</strong></div>
+                    <div><span>Autobahnanschluss</span><strong>{form.openDataLocation.evidence.nearestMotorwayJunctionMeters !== null ? `${form.openDataLocation.evidence.nearestMotorwayJunctionMeters} m · Radius ${form.openDataLocation.evidence.categoryRadiusKm?.motorway || 1} km` : "nicht verfügbar"}</strong></div>
                     <div><span>Strassen-/Bahnlärm</span><strong>{Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0) || "nicht verfügbar"}{Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0) ? " dB" : ""}</strong></div>
                     {form.openDataLocation.building?.egid && <div><span>EGID</span><strong>{form.openDataLocation.building.egid}</strong></div>}
                     {form.openDataLocation.building?.constructionYear && <div><span>GWR-Baujahr</span><strong>{form.openDataLocation.building.constructionYear}</strong></div>}
                   </div>
+                  <p className="open-data-radius">Automatische Umkreissuche: bis {form.openDataLocation.evidence.searchRadiusKm || 10} km. Der Radius wurde je Datenkategorie schrittweise erweitert.</p>
                   {form.openDataLocation.missing.length > 0 && (
-                    <p className="open-data-missing">Nicht verfügbare Teilwerte: {form.openDataLocation.missing.join(", ")}. Diese Faktoren werden neutral und transparent gewichtet.</p>
+                    <p className="open-data-missing">Nicht verfügbare Teilwerte: {form.openDataLocation.missing.join(", ")}. Für diese Faktoren werden keine erfundenen Distanzen angezeigt; im Score werden sie neutral gewichtet.</p>
                   )}
                   <details className="open-data-sources">
                     <summary>Datenquellen und Datenstand</summary>
@@ -675,7 +678,8 @@ export function NewAnalysis() {
                 ÖV zu Fuss (Min.)
                 <input
                   type="number"
-                  value={form.location.publicTransportMinutes}
+                  placeholder="nicht verfügbar"
+                  value={form.openDataLocation?.evidence.nearestPublicTransportMeters !== null ? form.location.publicTransportMinutes : ""}
                   onChange={(event) =>
                     setLocation("publicTransportMinutes", Number(event.target.value))
                   }
@@ -685,7 +689,8 @@ export function NewAnalysis() {
                 Einkauf (Min.)
                 <input
                   type="number"
-                  value={form.location.shoppingMinutes}
+                  placeholder="nicht verfügbar"
+                  value={form.openDataLocation?.evidence.nearestShoppingMeters !== null ? form.location.shoppingMinutes : ""}
                   onChange={(event) => setLocation("shoppingMinutes", Number(event.target.value))}
                 />
               </label>
@@ -693,7 +698,8 @@ export function NewAnalysis() {
                 Schule / Betreuung (Min.)
                 <input
                   type="number"
-                  value={form.location.schoolMinutes}
+                  placeholder="nicht verfügbar"
+                  value={form.openDataLocation?.evidence.nearestSchoolMeters !== null ? form.location.schoolMinutes : ""}
                   onChange={(event) => setLocation("schoolMinutes", Number(event.target.value))}
                 />
               </label>
@@ -701,7 +707,8 @@ export function NewAnalysis() {
                 Autobahnanschluss (Min.)
                 <input
                   type="number"
-                  value={form.location.motorwayMinutes}
+                  placeholder="nicht verfügbar"
+                  value={form.openDataLocation?.evidence.nearestMotorwayJunctionMeters !== null ? form.location.motorwayMinutes : ""}
                   onChange={(event) => setLocation("motorwayMinutes", Number(event.target.value))}
                 />
               </label>

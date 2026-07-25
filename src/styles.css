@@ -489,7 +489,7 @@ img,svg,iframe{max-width:100%}
 .print-report.pdf-capture .print-metrics strong{font-size:10px!important;white-space:nowrap}
 .print-report.pdf-capture .print-metrics span{font-size:7.5px!important;white-space:nowrap}
 
-/* V3.0 – Schweizer Open-Data-Lageanalyse */
+/* V3.1 – Schweizer Open-Data-Lageanalyse */
 .open-data-error {
   margin: 14px 0;
   padding: 13px 15px;
@@ -598,3 +598,15 @@ img,svg,iframe{max-width:100%}
   .result-open-data-grid { grid-template-columns: 1fr; }
   .open-data-sources > div { grid-template-columns: 1fr; gap: 2px; }
 }
+
+/* V3.1 – adaptive Open-Data radius and transparent missing values */
+.open-data-radius {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #eef7f3;
+  color: #275f52;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.open-data-evidence-grid strong { overflow-wrap: anywhere; }

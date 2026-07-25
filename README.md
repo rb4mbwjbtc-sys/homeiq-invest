@@ -1,22 +1,40 @@
-# HomeIQ Independent V3.0
+# HomeIQ Independent V3.1
 
-Automatische Lageanalyse mit echten offenen Schweizer Daten.
+V3.1 verbessert die automatische Schweizer Open-Data-Lageanalyse aus V3.0.
+
+## Änderungen gegenüber V3.0
+
+- Adaptive Umkreissuche für OpenStreetMap-Daten: 1 km, 2.5 km, 5 km und maximal 10 km.
+- Mehrere Overpass-Endpunkte als technische Ausweichmöglichkeit.
+- Erweiterte Suche nach ÖV-Haltestellen, Einkauf, Schulen/Betreuung und Autobahnanschlüssen.
+- Gemeinde- und GWR-Zuordnung direkt über GeoAdmin-Layer.
+- Fehlende Distanzen werden nicht mehr durch scheinbar konkrete Standardwerte dargestellt.
+- Nicht verfügbare Felder bleiben sichtbar leer und werden als „nicht verfügbar“ bezeichnet.
+- Der verwendete Suchradius wird je Kategorie transparent angezeigt.
+- Im Score werden fehlende Teilwerte weiterhin neutral gewichtet.
+- Die Datenqualität richtet sich nach der Zahl tatsächlich gefundener Teilwerte.
 
 ## Datenquellen
 
-- swisstopo / GeoAdmin: amtliche Adresssuche und Koordinaten
-- BFS: Gebäude- und Wohnungsregister sowie Leerwohnungszählung
-- ARE: ÖV-Güteklassen
-- BAFU: Strassen- und Bahnlärm
-- OpenStreetMap / Overpass: Distanzen zu ÖV, Einkauf, Schulen und Autobahnanschlüssen
+- swisstopo / GeoAdmin
+- Bundesamt für Raumentwicklung ARE
+- Bundesamt für Umwelt BAFU
+- Bundesamt für Statistik BFS
+- OpenStreetMap / Overpass
 
-Die App simuliert bei der Lageanalyse keine Standortwerte mehr. Nicht verfügbare Teilwerte werden transparent ausgewiesen und neutral gewichtet. Marktpreis und Marktmiete bleiben in V3.0 weiterhin separate, modellbasierte Module.
+## Wichtige Abgrenzung
 
-## Deployment
+Die Lageanalyse verwendet echte offene Daten. Marktmiete und Marktwert bleiben in V3.1 noch modellbasierte Module und werden in einem separaten Entwicklungsschritt durch belastbare Marktdaten ersetzt.
 
-Das Projekt enthält die Vercel Function `api/location.js`. Keine API-Schlüssel erforderlich.
+## Lokal starten
 
 ```bash
 npm install
+npm run dev
+```
+
+## Produktions-Build
+
+```bash
 npm run build
 ```

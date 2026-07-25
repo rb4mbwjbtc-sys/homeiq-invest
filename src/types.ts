@@ -57,6 +57,13 @@ export type OpenDataLocationReport = {
     nearestShoppingMeters: number | null;
     nearestSchoolMeters: number | null;
     nearestMotorwayJunctionMeters: number | null;
+    searchRadiusKm?: number;
+    categoryRadiusKm?: {
+      transit: number | null;
+      shopping: number | null;
+      school: number | null;
+      motorway: number | null;
+    };
   };
   quality: "hoch" | "mittel" | "eingeschränkt";
   missing: string[];
