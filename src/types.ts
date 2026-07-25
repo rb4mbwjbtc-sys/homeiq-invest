@@ -69,6 +69,13 @@ export type OpenDataLocationReport = {
   missing: string[];
   loadedAt: string;
   sources: OpenDataSource[];
+  cache?: { hit: boolean; ttlDays: number };
+  sourceStatus?: Array<{
+    name: string;
+    status: "loaded" | "unavailable" | "timeout" | "error";
+    durationMs: number;
+    error: string | null;
+  }>;
 };
 
 export type AnalysisInput = {

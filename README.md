@@ -1,40 +1,43 @@
-# HomeIQ Independent V3.1
+# HomeIQ Independent V3.2
 
-V3.1 verbessert die automatische Schweizer Open-Data-Lageanalyse aus V3.0.
+V3.2 stabilisiert die automatische Schweizer Open-Data-Lageanalyse aus V3.1.
 
-## Änderungen gegenüber V3.0
+## Hauptverbesserungen
 
-- Adaptive Umkreissuche für OpenStreetMap-Daten: 1 km, 2.5 km, 5 km und maximal 10 km.
-- Mehrere Overpass-Endpunkte als technische Ausweichmöglichkeit.
-- Erweiterte Suche nach ÖV-Haltestellen, Einkauf, Schulen/Betreuung und Autobahnanschlüssen.
-- Gemeinde- und GWR-Zuordnung direkt über GeoAdmin-Layer.
-- Fehlende Distanzen werden nicht mehr durch scheinbar konkrete Standardwerte dargestellt.
-- Nicht verfügbare Felder bleiben sichtbar leer und werden als „nicht verfügbar“ bezeichnet.
-- Der verwendete Suchradius wird je Kategorie transparent angezeigt.
-- Im Score werden fehlende Teilwerte weiterhin neutral gewichtet.
-- Die Datenqualität richtet sich nach der Zahl tatsächlich gefundener Teilwerte.
+- Gesamtes serverseitiges Zeitlimit von 9 Sekunden
+- Clientseitiger Abbruch nach 12 Sekunden: kein unendlicher Ladezustand
+- Externe Quellen werden weitgehend parallel abgefragt
+- `Promise.allSettled`-ähnliche Teilresultate: einzelne Ausfälle blockieren nicht die ganze Analyse
+- GeoAdmin bleibt die primäre Quelle für Adresse, Gemeinde, GWR, ÖV-Güteklasse und Lärm
+- Nächstgelegene ÖV-Haltestelle über die Schweizer Transport API
+- POI-Suche für Einkauf, Schule/Betreuung und Autobahn in einer einzigen, begrenzten Abfrage bis 10 km
+- Zwei parallele Overpass-Endpunkte; der erste erfolgreiche Datensatz wird verwendet
+- BFS-Leerstand mit kurzem Timeout; bei Ausfall bleiben andere Daten verfügbar
+- Cache im Browser für 30 Tage
+- zusätzlicher kurzlebiger Server-/CDN-Cache
+- transparente Statusdaten je Quelle
+- keine simulierten Distanzen in der Benutzeroberfläche
+
+## Verhalten bei Teilausfällen
+
+Die Analyse liefert verfügbare Resultate zurück. Fehlende Teilwerte werden als „nicht verfügbar“ angezeigt und im Score neutral behandelt. Eine langsame oder ausgefallene Quelle hält die App nicht mehr dauerhaft im Ladezustand.
 
 ## Datenquellen
 
 - swisstopo / GeoAdmin
-- Bundesamt für Raumentwicklung ARE
-- Bundesamt für Umwelt BAFU
-- Bundesamt für Statistik BFS
+- ARE ÖV-Güteklassen
+- BAFU Lärmdaten
+- BFS Leerwohnungszählung
+- Transport API Schweiz
 - OpenStreetMap / Overpass
 
-## Wichtige Abgrenzung
+Marktmiete und Marktwert bleiben in V3.2 noch modellbasiert.
 
-Die Lageanalyse verwendet echte offene Daten. Marktmiete und Marktwert bleiben in V3.1 noch modellbasierte Module und werden in einem separaten Entwicklungsschritt durch belastbare Marktdaten ersetzt.
+## Optionaler persistenter Cache mit Supabase
 
-## Lokal starten
+V3.2 funktioniert auch ohne Supabase. Für einen geräteübergreifenden 30-Tage-Cache kann später `supabase/location_cache.sql` im eigenen Supabase-Projekt ausgeführt werden. Anschliessend werden in Vercel nur serverseitig gesetzt:
 
-```bash
-npm install
-npm run dev
-```
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
 
-## Produktions-Build
-
-```bash
-npm run build
-```
+Der Service-Role-Key wird nie an den Browser ausgeliefert. Fällt Supabase aus oder ist es nicht konfiguriert, läuft die Analyse weiterhin über Browser-, CDN- und In-Memory-Cache.
