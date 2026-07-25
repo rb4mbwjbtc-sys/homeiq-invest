@@ -43,7 +43,6 @@ export function HomeIQScoreCard({ score, rating, compact = false, print = false 
           />
         </svg>
         <div className="homeiq-score-center">
-          <Building2 className="homeiq-score-house" aria-hidden="true" />
           <div className="homeiq-score-value">
             <strong>{safeScore}</strong>
             <span>/ 100</span>

@@ -1,10 +1,12 @@
 import { ArrowRight, Plus, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
+import { loadAnalyses } from "../lib/storage";
 import { HomeIQScoreCard } from "../components/HomeIQScoreCard";
 
 const weights = [["Nettorendite","35 %"],["Lage","25 %"],["Eigenkapitalrendite","20 %"],["Objektqualität","12 %"],["Marktfähigkeit","8 %"]];
 
 export function Dashboard() {
+  const remainingFreeAnalyses = Math.max(0, 3 - loadAnalyses().length);
   return (
     <div className="page-stack dashboard-page">
       <section className="hero">
@@ -16,7 +18,7 @@ export function Dashboard() {
             <Link className="button primary" to="/analyse"><Plus size={18}/>Neue Analyse</Link>
             <Link className="button secondary" to="/analysen">Gespeicherte Analysen <ArrowRight size={18}/></Link>
           </div>
-          <small className="free-note">3 Analysen gratis pro Tag</small>
+          <small className="free-note">{remainingFreeAnalyses} kostenlose {remainingFreeAnalyses === 1 ? "Analyse" : "Analysen"} übrig</small>
         </div>
         <HomeIQScoreCard score={78} rating="Gute Investitionsmöglichkeit" compact />
       </section>

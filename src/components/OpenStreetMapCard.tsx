@@ -94,18 +94,17 @@ function TileMap({ coordinates, address, print }: { coordinates: Coordinates; ad
           {tiles.map((tile) => (
             <img
               key={`${tile.x}-${tile.y}`}
-              src={`https://tile.openstreetmap.org/${ZOOM}/${tile.x}/${tile.y}.png`}
+              src={`https://a.basemaps.cartocdn.com/light_all/${ZOOM}/${tile.x}/${tile.y}.png`}
               alt=""
               crossOrigin="anonymous"
-              referrerPolicy="no-referrer"
-              style={{ left: tile.col * TILE_SIZE, top: tile.row * TILE_SIZE }}
+                            style={{ left: tile.col * TILE_SIZE, top: tile.row * TILE_SIZE }}
             />
           ))}
         </div>
         <div className="osm-property-marker" aria-hidden="true">
           <MapPin size={print ? 20 : 34} fill="currentColor" />
         </div>
-        <div className="osm-attribution">© OpenStreetMap-Mitwirkende</div>
+        <div className="osm-attribution">© OpenStreetMap · © CARTO</div>
       </div>
       {!print && (
         <a href={osmUrl} target="_blank" rel="noreferrer" className="map-open-link">
