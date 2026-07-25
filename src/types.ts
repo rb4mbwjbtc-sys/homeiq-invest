@@ -28,6 +28,42 @@ export type LocationInputs = {
   microLocation: number;
 };
 
+
+export type OpenDataSource = { name: string; detail: string };
+
+export type OpenDataLocationReport = {
+  address: {
+    formatted: string;
+    lat: number;
+    lon: number;
+    easting: number;
+    northing: number;
+  };
+  building: {
+    egid: string | number | null;
+    buildingCategory: string | null;
+    constructionYear: number | null;
+    municipality: string | null;
+    municipalityBfs: string | null;
+    sourceUpdatedAt: string | null;
+  } | null;
+  evidence: {
+    transitClass: string | null;
+    vacancyRate: number | null;
+    vacancyYear: string | null;
+    roadNoiseDb: number | null;
+    railNoiseDb: number | null;
+    nearestPublicTransportMeters: number | null;
+    nearestShoppingMeters: number | null;
+    nearestSchoolMeters: number | null;
+    nearestMotorwayJunctionMeters: number | null;
+  };
+  quality: "hoch" | "mittel" | "eingeschränkt";
+  missing: string[];
+  loadedAt: string;
+  sources: OpenDataSource[];
+};
+
 export type AnalysisInput = {
   id: string;
   createdAt: string;
@@ -62,6 +98,7 @@ export type AnalysisInput = {
   regionalMarketRentPerSqm: number;
   marketDataRadiusKm: number;
   rentalUnits: RentalUnit[];
+  openDataLocation?: OpenDataLocationReport | null;
 };
 
 export type ScoreBreakdown = {

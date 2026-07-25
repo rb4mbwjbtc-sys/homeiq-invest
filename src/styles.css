@@ -488,3 +488,113 @@ img,svg,iframe{max-width:100%}
 .print-report.pdf-capture .print-market-columns p{font-size:8px!important}
 .print-report.pdf-capture .print-metrics strong{font-size:10px!important;white-space:nowrap}
 .print-report.pdf-capture .print-metrics span{font-size:7.5px!important;white-space:nowrap}
+
+/* V3.0 – Schweizer Open-Data-Lageanalyse */
+.open-data-error {
+  margin: 14px 0;
+  padding: 13px 15px;
+  border: 1px solid #e8b7ae;
+  border-radius: 12px;
+  background: #fff3f0;
+  color: #963d2d;
+  font-weight: 700;
+}
+.open-data-report {
+  margin-bottom: 22px;
+  padding: 22px;
+  border: 1px solid #bdd9d0;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #f2faf7, #fff);
+}
+.open-data-report-head,
+.result-open-data-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.open-data-report-head h3 { margin: 5px 0 4px; }
+.open-data-report-head p { margin: 0; }
+.data-quality {
+  flex: 0 0 auto;
+  padding: 8px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+.quality-hoch { background: #daf4e8; color: #075a42; }
+.quality-mittel { background: #eef2d5; color: #60600b; }
+.quality-eingeschränkt { background: #fff0d6; color: #8a4c00; }
+.open-data-evidence-grid,
+.result-open-data-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+.open-data-evidence-grid > div,
+.result-open-data-grid > div {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid #dbe7e3;
+  border-radius: 12px;
+  background: rgba(255,255,255,.86);
+}
+.open-data-evidence-grid span,
+.result-open-data-grid span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.open-data-evidence-grid strong,
+.result-open-data-grid strong {
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+.open-data-missing {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: #fff8e9;
+  color: #78510e;
+  font-size: 13px;
+}
+.open-data-sources { margin-top: 14px; }
+.open-data-sources summary,
+.result-open-data summary { cursor: pointer; color: var(--green); font-weight: 800; }
+.open-data-sources > div {
+  display: grid;
+  grid-template-columns: minmax(160px, .35fr) 1fr;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #e8efec;
+  font-size: 13px;
+}
+.open-data-sources > div span { color: var(--muted); }
+.open-data-sources small { display: block; margin-top: 10px; color: var(--muted); }
+.result-open-data {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid #cfe2dc;
+  border-radius: 16px;
+  background: #f5fbf9;
+}
+.result-open-data details { margin-top: 14px; }
+.result-open-data details p { margin: 8px 0; font-size: 13px; }
+.print-open-data { margin-top: 4px; }
+.print-open-data p { margin: 1px 0 !important; font-size: 7.5px !important; }
+
+@media (max-width: 900px) {
+  .open-data-evidence-grid,
+  .result-open-data-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .open-data-report { padding: 16px; }
+  .open-data-report-head,
+  .result-open-data-head { flex-direction: column; }
+  .open-data-evidence-grid,
+  .result-open-data-grid { grid-template-columns: 1fr; }
+  .open-data-sources > div { grid-template-columns: 1fr; gap: 2px; }
+}

@@ -6,6 +6,7 @@ type Props = {
   postalCode: string;
   city: string;
   print?: boolean;
+  coordinates?: { lat: number; lon: number } | null;
 };
 
 type Coordinates = { lat: number; lon: number };
@@ -115,17 +116,23 @@ function TileMap({ coordinates, address, print }: { coordinates: Coordinates; ad
   );
 }
 
-export function OpenStreetMapCard({ street, postalCode, city, print = false }: Props) {
+export function OpenStreetMapCard({ street, postalCode, city, print = false, coordinates: suppliedCoordinates = null }: Props) {
   const address = addressText(street, postalCode, city);
   const [coordinates, setCoordinates] = useState<Coordinates | null>(
-    () => geocodeCache.get(address) ?? null,
+    () => suppliedCoordinates ?? geocodeCache.get(address) ?? null,
   );
-  const [loading, setLoading] = useState(!geocodeCache.has(address));
+  const [loading, setLoading] = useState(!suppliedCoordinates && !geocodeCache.has(address));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setError(null);
+
+    if (suppliedCoordinates) {
+      setCoordinates(suppliedCoordinates);
+      setLoading(false);
+      return () => { cancelled = true; };
+    }
 
     if (!street && !postalCode && !city) {
       setCoordinates(null);
@@ -156,7 +163,7 @@ export function OpenStreetMapCard({ street, postalCode, city, print = false }: P
       });
 
     return () => { cancelled = true; };
-  }, [address, city, postalCode, street]);
+  }, [address, city, postalCode, street, suppliedCoordinates]);
 
   if (coordinates) {
     return <TileMap coordinates={coordinates} address={address} print={print} />;

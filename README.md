@@ -1,30 +1,22 @@
-# HomeIQ Independent V2.9
+# HomeIQ Independent V3.0
 
-V2.9 basiert auf V2.6 und ersetzt Google Maps vollständig durch OpenStreetMap.
+Automatische Lageanalyse mit echten offenen Schweizer Daten.
 
-## Neu
+## Datenquellen
 
-- kostenlose OpenStreetMap-Karte ohne API-Key
-- Adressauflösung über Nominatim
-- Objekt-Pin auf der Ergebnisseite
-- derselbe Kartenausschnitt im PDF
-- OpenStreetMap-Quellenhinweis
-- keine Google-Maps-Umgebungsvariable erforderlich
+- swisstopo / GeoAdmin: amtliche Adresssuche und Koordinaten
+- BFS: Gebäude- und Wohnungsregister sowie Leerwohnungszählung
+- ARE: ÖV-Güteklassen
+- BAFU: Strassen- und Bahnlärm
+- OpenStreetMap / Overpass: Distanzen zu ÖV, Einkauf, Schulen und Autobahnanschlüssen
+
+Die App simuliert bei der Lageanalyse keine Standortwerte mehr. Nicht verfügbare Teilwerte werden transparent ausgewiesen und neutral gewichtet. Marktpreis und Marktmiete bleiben in V3.0 weiterhin separate, modellbasierte Module.
 
 ## Deployment
+
+Das Projekt enthält die Vercel Function `api/location.js`. Keine API-Schlüssel erforderlich.
 
 ```bash
 npm install
 npm run build
 ```
-
-Vercel: Framework Vite, Build `npm run build`, Output `dist`.
-
-
-## Änderungen in V2.9
-
-- Score-Ring ohne zusätzliches Symbol über der Zahl
-- Kartenkacheln über CARTO/OpenStreetMap ohne 403-Referrer-Fehler
-- fixer Header auf Desktop und Mobile
-- Gratis-Kontingent: insgesamt drei Analysen, mit verbleibender Anzahl
-- stabilisiertes Einseiten-PDF ohne überlappende Score-Faktoren

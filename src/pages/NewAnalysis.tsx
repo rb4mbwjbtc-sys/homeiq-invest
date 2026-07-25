@@ -17,6 +17,7 @@ import type { AnalysisInput, PropertyType, RentalUnit } from "../types";
 import { findAnalysis, saveAnalysis } from "../lib/storage";
 import { analyseLocation, analyseMarket } from "../lib/market";
 import { money } from "../lib/format";
+import { loadSwissOpenDataLocation } from "../lib/locationOpenData";
 
 const objectTypes = [
   { id: "wohnung", label: "Eigentumswohnung", icon: Building2 },
@@ -99,6 +100,7 @@ const initial: AnalysisInput = {
   regionalMarketRentPerSqm: 0,
   marketDataRadiusKm: 5,
   rentalUnits: [newUnit(1), newUnit(2), newUnit(3)],
+  openDataLocation: null,
 };
 
 export function NewAnalysis() {
@@ -106,7 +108,8 @@ export function NewAnalysis() {
   const existingAnalysis = editId ? findAnalysis(editId) : undefined;
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<AnalysisInput>(() => existingAnalysis ? structuredClone(existingAnalysis) : structuredClone(initial));
-  const [locationLoaded, setLocationLoaded] = useState(() => Boolean(existingAnalysis && existingAnalysis.regionalMarketPricePerSqm > 0));
+  const [locationLoaded, setLocationLoaded] = useState(() => Boolean(existingAnalysis?.openDataLocation));
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [marketValueGenerated, setMarketValueGenerated] = useState<number | null>(null);
   const [marketRentGenerated, setMarketRentGenerated] = useState<number | null>(null);
@@ -184,39 +187,34 @@ export function NewAnalysis() {
     }));
   };
 
-  const loadLocation = () => {
+  const loadLocation = async () => {
     if (!form.postalCode || !form.city) return;
     setLoadingLocation(true);
-
-    window.setTimeout(() => {
-      const seed = Number(form.postalCode.slice(-2)) || 50;
-      const priceBenchmark = 6200 + seed * 24;
-      const rentBenchmark = 20 + (seed % 8) * 0.55;
-
+    setLocationError(null);
+    try {
+      const report = await loadSwissOpenDataLocation(form);
       setForm((previous) => ({
         ...previous,
-        location: {
-          publicTransportMinutes: 6,
-          shoppingMinutes: 8,
-          schoolMinutes: 10,
-          motorwayMinutes: 12,
-          noiseLevel: 28,
-          municipalityDemand: 72,
-          vacancyRisk: 18,
-          microLocation: 74,
+        location: report.metrics,
+        openDataLocation: {
+          address: report.address,
+          building: report.building,
+          evidence: report.evidence,
+          quality: report.quality,
+          missing: report.missing,
+          loadedAt: report.loadedAt,
+          sources: report.sources,
         },
-        regionalMarketPricePerSqm: Math.round(priceBenchmark / 50) * 50,
-        regionalMarketRentPerSqm: Math.round(rentBenchmark * 2) / 2,
-        rentalUnits: previous.rentalUnits.map((unit) => ({
-          ...unit,
-          marketRentPerSqm: Math.round(rentBenchmark * 2) / 2,
-        })),
       }));
       setLocationLoaded(true);
-      setLoadingLocation(false);
       setMarketValueGenerated(null);
       setMarketRentGenerated(null);
-    }, 450);
+    } catch (error) {
+      setLocationLoaded(false);
+      setLocationError(error instanceof Error ? error.message : "Standortdaten konnten nicht geladen werden.");
+    } finally {
+      setLoadingLocation(false);
+    }
   };
 
   const generateMarketValue = () => {
@@ -278,7 +276,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V2.8</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V3.0</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit Lageanalyse, Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -336,7 +334,7 @@ export function NewAnalysis() {
             </label>
             <label className="full">
               Strasse und Nr.
-              <input value={form.street} onChange={(event) => set("street", event.target.value)} />
+              <input value={form.street} onChange={(event) => { set("street", event.target.value); setLocationLoaded(false); set("openDataLocation", null); }} />
             </label>
             <label>
               PLZ
@@ -345,6 +343,7 @@ export function NewAnalysis() {
                 onChange={(event) => {
                   set("postalCode", event.target.value);
                   setLocationLoaded(false);
+                  set("openDataLocation", null);
                 }}
               />
             </label>
@@ -355,6 +354,7 @@ export function NewAnalysis() {
                 onChange={(event) => {
                   set("city", event.target.value);
                   setLocationLoaded(false);
+                  set("openDataLocation", null);
                 }}
               />
             </label>
@@ -605,12 +605,11 @@ export function NewAnalysis() {
             <div>
               <strong>Standortdaten automatisch laden</strong>
               <span>
-                Leerstand, Nachfrage, Erreichbarkeit und Marktbenchmarks werden erst
-                nach dem Klick auf «Laden» eingetragen.
+                Amtliche Adresse, GWR, ÖV-Güteklasse, Leerstand, Lärm und Distanzen werden aus echten offenen Daten geladen.
               </span>
               {locationLoaded && (
                 <small>
-                  ✓ {form.city || form.postalCode} · Datenradius {form.marketDataRadiusKm} km
+                  ✓ Echte Open-Data-Analyse · Datenqualität {form.openDataLocation?.quality || "mittel"}
                 </small>
               )}
             </div>
@@ -631,14 +630,47 @@ export function NewAnalysis() {
             </button>
           </div>
 
+          {locationError && <div className="open-data-error">{locationError}</div>}
+
           {!locationLoaded ? (
             <div className="empty-data compact-empty">
               <MapPin size={28} />
               <h3>Noch keine Standortdaten geladen</h3>
-              <p>Die Felder bleiben bewusst leer, bis du die Daten oben aktiv lädst.</p>
+              <p>Die Werte werden nicht simuliert. Sie erscheinen erst, nachdem die amtlichen und offenen Daten erfolgreich geladen wurden.</p>
             </div>
           ) : (
-            <div className="form-grid">
+            <>
+              {form.openDataLocation && (
+                <section className="open-data-report">
+                  <div className="open-data-report-head">
+                    <div>
+                      <span className="eyebrow">SCHWEIZER OPEN DATA</span>
+                      <h3>{form.openDataLocation.address.formatted}</h3>
+                      <p>Automatisch ausgewertet aus offiziellen Bundesdaten und OpenStreetMap-Distanzen.</p>
+                    </div>
+                    <span className={`data-quality quality-${form.openDataLocation.quality}`}>Datenqualität: {form.openDataLocation.quality}</span>
+                  </div>
+                  <div className="open-data-evidence-grid">
+                    <div><span>ÖV-Güteklasse</span><strong>{form.openDataLocation.evidence.transitClass || "nicht verfügbar"}</strong></div>
+                    <div><span>Leerwohnungsziffer</span><strong>{form.openDataLocation.evidence.vacancyRate !== null ? `${form.openDataLocation.evidence.vacancyRate.toFixed(2)} %` : "nicht verfügbar"}</strong></div>
+                    <div><span>Nächster ÖV-Punkt</span><strong>{form.openDataLocation.evidence.nearestPublicTransportMeters !== null ? `${form.openDataLocation.evidence.nearestPublicTransportMeters} m` : "nicht verfügbar"}</strong></div>
+                    <div><span>Einkauf</span><strong>{form.openDataLocation.evidence.nearestShoppingMeters !== null ? `${form.openDataLocation.evidence.nearestShoppingMeters} m` : "nicht verfügbar"}</strong></div>
+                    <div><span>Schule / Betreuung</span><strong>{form.openDataLocation.evidence.nearestSchoolMeters !== null ? `${form.openDataLocation.evidence.nearestSchoolMeters} m` : "nicht verfügbar"}</strong></div>
+                    <div><span>Strassen-/Bahnlärm</span><strong>{Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0) || "nicht verfügbar"}{Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0) ? " dB" : ""}</strong></div>
+                    {form.openDataLocation.building?.egid && <div><span>EGID</span><strong>{form.openDataLocation.building.egid}</strong></div>}
+                    {form.openDataLocation.building?.constructionYear && <div><span>GWR-Baujahr</span><strong>{form.openDataLocation.building.constructionYear}</strong></div>}
+                  </div>
+                  {form.openDataLocation.missing.length > 0 && (
+                    <p className="open-data-missing">Nicht verfügbare Teilwerte: {form.openDataLocation.missing.join(", ")}. Diese Faktoren werden neutral und transparent gewichtet.</p>
+                  )}
+                  <details className="open-data-sources">
+                    <summary>Datenquellen und Datenstand</summary>
+                    {form.openDataLocation.sources.map((source) => <div key={source.name}><strong>{source.name}</strong><span>{source.detail}</span></div>)}
+                    <small>Geladen am {new Date(form.openDataLocation.loadedAt).toLocaleString("de-CH")}</small>
+                  </details>
+                </section>
+              )}
+              <div className="form-grid">
               <label>
                 ÖV zu Fuss (Min.)
                 <input
@@ -748,7 +780,8 @@ export function NewAnalysis() {
                   }
                 />
               </label>
-            </div>
+              </div>
+            </>
           )}
           <div className="form-footer">
             <button className="button secondary" onClick={() => setStep(2)}>

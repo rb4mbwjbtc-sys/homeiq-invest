@@ -113,7 +113,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2.9</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V3.0</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -337,6 +337,23 @@ export function Result() {
               </div>
             ))}
           </div>
+          {input.openDataLocation && (
+            <div className="result-open-data">
+              <div className="result-open-data-head">
+                <div><span className="eyebrow">ECHTE SCHWEIZER OPEN DATA</span><strong>Datenqualität: {input.openDataLocation.quality}</strong></div>
+                <small>Geladen am {new Date(input.openDataLocation.loadedAt).toLocaleDateString("de-CH")}</small>
+              </div>
+              <div className="result-open-data-grid">
+                <div><span>ÖV-Güteklasse</span><strong>{input.openDataLocation.evidence.transitClass || "—"}</strong></div>
+                <div><span>Leerwohnungsziffer</span><strong>{input.openDataLocation.evidence.vacancyRate !== null ? `${input.openDataLocation.evidence.vacancyRate.toFixed(2)} %` : "—"}</strong></div>
+                <div><span>Nächster ÖV-Punkt</span><strong>{input.openDataLocation.evidence.nearestPublicTransportMeters !== null ? `${input.openDataLocation.evidence.nearestPublicTransportMeters} m` : "—"}</strong></div>
+                <div><span>Einkauf</span><strong>{input.openDataLocation.evidence.nearestShoppingMeters !== null ? `${input.openDataLocation.evidence.nearestShoppingMeters} m` : "—"}</strong></div>
+                <div><span>Schule / Betreuung</span><strong>{input.openDataLocation.evidence.nearestSchoolMeters !== null ? `${input.openDataLocation.evidence.nearestSchoolMeters} m` : "—"}</strong></div>
+                <div><span>EGID</span><strong>{input.openDataLocation.building?.egid || "—"}</strong></div>
+              </div>
+              <details><summary>Verwendete Quellen</summary>{input.openDataLocation.sources.map((source) => <p key={source.name}><strong>{source.name}:</strong> {source.detail}</p>)}</details>
+            </div>
+          )}
           <div className="analysis-map-block">
             <div className="section-heading map-heading">
               <div>
@@ -345,7 +362,7 @@ export function Result() {
               </div>
               <MapPin size={22} />
             </div>
-            <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} />
+            <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} coordinates={input.openDataLocation?.address ?? null} />
           </div>
         </section>
 
@@ -378,7 +395,7 @@ export function Result() {
           <span>Erstellt am {new Date(input.createdAt).toLocaleDateString("de-CH")}</span>
         </footer>
         <p className="disclaimer">
-          Modellbasierte Schätzung auf Grundlage der eingegebenen Benchmarks. Keine
+          Lageanalyse auf Basis amtlicher Schweizer Open Data und OpenStreetMap. Marktwerte bleiben modellbasiert. Keine
           Anlage-, Steuer-, Rechts- oder Verkehrswertberatung.
         </p>
       </div>
@@ -386,7 +403,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V2.9</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V3.0</span></div>
             <h1>{input.title}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
@@ -519,7 +536,7 @@ export function Result() {
           <div className="print-location-column">
             <h2>LAGE</h2>
             <div className="print-location-score">{location.score}/100 · {location.rating}</div>
-            <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} print />
+            <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} coordinates={input.openDataLocation?.address ?? null} print />
             {location.factors.slice(0, 3).map((factor) => (
               <p key={factor.label}>
                 {factor.label}: {factor.score}/100
