@@ -393,3 +393,76 @@ img,svg,iframe{max-width:100%}
   .homeiq-score-card.compact .homeiq-score-center strong{font-size:50px}
   .homeiq-score-title,.homeiq-score-card.compact .homeiq-score-title{font-size:9px}
 }
+
+
+/* HomeIQ V2.8 – gezielte Design- und PDF-Korrekturen */
+.dashboard-score-model{max-width:760px;margin:0 auto;width:100%}
+.homeiq-score-center{gap:0!important}
+.homeiq-score-house{display:none!important}
+.homeiq-score-card.compact .homeiq-score-center strong{font-size:68px;line-height:.9}
+.homeiq-score-card.compact .homeiq-score-center span{margin-top:9px}
+
+/* Kartenkacheln: neutrale Basiskarte, nur Immobilien-Pin. */
+.osm-tile-layer{width:768px;height:768px}
+.osm-tile-layer img{display:block;background:#edf2f0}
+.osm-property-marker{z-index:10;color:#08725b}
+.analysis-map-block .eyebrow{color:#0b6a55}
+
+/* PDF: feste, robuste Abmessungen und keine Überlagerungen. */
+.print-report.pdf-capture{
+  width:794px!important;
+  height:1123px!important;
+  padding:30px 34px 24px!important;
+  font-size:10px!important;
+  line-height:1.22!important;
+  color:#12362e!important;
+}
+.print-report.pdf-capture .print-header{
+  grid-template-columns:minmax(0,1fr) 176px!important;
+  gap:20px!important;
+  min-height:168px!important;
+  align-items:center!important;
+  padding-bottom:10px!important;
+}
+.print-report.pdf-capture .print-header h1{font-size:27px!important;max-width:500px;overflow-wrap:anywhere}
+.print-report.pdf-capture .print-header p{font-size:12px!important;overflow-wrap:anywhere}
+.print-report.pdf-capture .print-header .homeiq-score-card.print-mode{
+  width:176px!important;height:168px!important;padding:8px 10px!important;border-radius:18px!important;gap:3px!important
+}
+.print-report.pdf-capture .print-header .homeiq-score-gauge{width:82px!important;height:82px!important}
+.print-report.pdf-capture .print-header .homeiq-score-center{width:78%!important;height:78%!important}
+.print-report.pdf-capture .print-header .homeiq-score-center strong{font-size:33px!important;line-height:.9!important}
+.print-report.pdf-capture .print-header .homeiq-score-center span{font-size:8px!important;margin-top:3px!important}
+.print-report.pdf-capture .print-header .homeiq-score-title{font-size:6px!important;letter-spacing:.13em!important;gap:4px!important;white-space:nowrap}
+.print-report.pdf-capture .print-header .homeiq-score-title i{width:18px!important}
+.print-report.pdf-capture .print-header .homeiq-score-rating{font-size:6px!important;line-height:1.1!important;padding:3px 5px!important;max-width:96%!important;white-space:normal!important}
+.print-report.pdf-capture .print-header .homeiq-score-factors{padding-top:4px!important;margin-top:1px!important;grid-template-columns:repeat(5,minmax(0,1fr))!important}
+.print-report.pdf-capture .print-header .homeiq-score-factors>div{padding:0 1px!important;gap:1px!important;min-height:0!important;border-bottom:0!important}
+.print-report.pdf-capture .print-header .homeiq-score-factors svg{width:11px!important;height:11px!important}
+.print-report.pdf-capture .print-header .homeiq-score-factors>div>span{font-size:4px!important;line-height:1!important;overflow-wrap:anywhere}
+.print-report.pdf-capture .print-recommendation{margin:6px 0 7px!important}
+.print-report.pdf-capture .print-section{margin-top:6px!important;padding-top:5px!important}
+.print-report.pdf-capture .print-section h2{margin-bottom:4px!important}
+.print-report.pdf-capture .print-metrics{gap:3px!important}
+.print-report.pdf-capture .print-metrics div{padding:4px!important}
+.print-report.pdf-capture .print-metrics span{font-size:7px!important}
+.print-report.pdf-capture .print-metrics strong{font-size:10px!important}
+.print-report.pdf-capture .print-score-breakdown{gap:2px!important}
+.print-report.pdf-capture .print-score-breakdown>div{grid-template-columns:120px 74px minmax(0,1fr) 42px!important;gap:5px!important}
+.print-report.pdf-capture .print-score-breakdown span{font-size:10px!important;white-space:nowrap}
+.print-report.pdf-capture .print-score-breakdown small{font-size:8px!important;white-space:nowrap}
+.print-report.pdf-capture .print-market-columns>div{padding:6px!important}
+.print-report.pdf-capture .print-market-columns h3{font-size:18px!important}
+.print-report.pdf-capture .print-market-columns p{font-size:9px!important}
+.print-report.pdf-capture .print-bottom-grid{grid-template-columns:1.25fr .82fr .93fr!important;gap:7px!important}
+.print-report.pdf-capture .print-bottom-grid>div{padding:6px!important;min-width:0;overflow:hidden}
+.print-report.pdf-capture .print-bottom-grid p{font-size:9px!important;line-height:1.22!important;overflow-wrap:anywhere}
+.print-report.pdf-capture .print-pros-cons{gap:4px!important}
+.print-report.pdf-capture .print-osm-map,
+.print-report.pdf-capture .print-osm-map .osm-map-viewport{height:92px!important;min-height:92px!important}
+.print-report.pdf-capture .print-location-column .osm-map-card{margin:4px 0 0!important}
+.print-report.pdf-capture .print-footer{margin-top:6px!important}
+
+@media(max-width:600px){
+  .dashboard-score-model{max-width:none}
+}

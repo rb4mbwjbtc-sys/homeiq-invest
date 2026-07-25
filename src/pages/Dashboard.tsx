@@ -1,11 +1,8 @@
-import { ArrowRight, BarChart3, Building2, FileText, Plus, ShieldCheck } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
-import { MetricCard } from "../components/MetricCard";
 import { HomeIQScoreCard } from "../components/HomeIQScoreCard";
-import { loadAnalyses } from "../lib/storage";
 
 export function Dashboard() {
-  const count = loadAnalyses().length;
   return (
     <div className="page-stack">
       <section className="hero">
@@ -21,15 +18,21 @@ export function Dashboard() {
         </div>
         <HomeIQScoreCard score={78} rating="Gute Investitionsmöglichkeit" compact />
       </section>
-      <section className="metrics-grid">
-        <MetricCard label="Analysen" value={String(count)} detail="Lokal gespeichert" icon={BarChart3}/>
-        <MetricCard label="Objekte" value="5 Typen" detail="Wohnung, Haus und MFH" icon={Building2}/>
-        <MetricCard label="PDF-Berichte" value="Bereit" detail="Professioneller PDF-Export" icon={FileText}/>
-        <MetricCard label="Unabhängigkeit" value="100 %" detail="Keine Lovable-Abhängigkeit" icon={ShieldCheck}/>
-      </section>
-      <section className="two-column">
-        <article className="panel"><span className="eyebrow">SCHNELLSTART</span><h2>Neue Immobilienanalyse</h2><p>Erfasse Objekt, Finanzierung und Ertrag. HomeIQ bewertet Rendite, Risiko und langfristiges Potenzial.</p><Link className="text-link" to="/analyse">Analyse starten <ArrowRight size={17}/></Link></article>
-        <article className="panel"><span className="eyebrow">SCORE-MODELL</span><h2>Transparent gewichtet</h2><div className="weight-list">{[["Nettorendite","35 %"],["Lage","25 %"],["Eigenkapitalrendite","20 %"],["Objektqualität","12 %"],["Marktfähigkeit","8 %"]].map(([n,w])=><div key={n}><span>{n}</span><strong>{w}</strong></div>)}</div></article>
+
+      <section className="panel dashboard-score-model">
+        <span className="eyebrow">SCORE-MODELL</span>
+        <h2>Transparent gewichtet</h2>
+        <div className="weight-list">
+          {[
+            ["Nettorendite", "35 %"],
+            ["Lage", "25 %"],
+            ["Eigenkapitalrendite", "20 %"],
+            ["Objektqualität", "12 %"],
+            ["Marktfähigkeit", "8 %"],
+          ].map(([name, weight]) => (
+            <div key={name}><span>{name}</span><strong>{weight}</strong></div>
+          ))}
+        </div>
       </section>
     </div>
   );

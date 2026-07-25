@@ -113,7 +113,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2.5</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2.8</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -340,7 +340,7 @@ export function Result() {
           <div className="analysis-map-block">
             <div className="section-heading map-heading">
               <div>
-                <span className="eyebrow">GOOGLE MAPS</span>
+                <span className="eyebrow">OPENSTREETMAP</span>
                 <h3>Standort der Immobilie</h3>
               </div>
               <MapPin size={22} />
@@ -519,11 +519,6 @@ export function Result() {
             <h2>LAGE</h2>
             <div className="print-location-score">{location.score}/100 · {location.rating}</div>
             <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} print />
-            {location.factors.slice(0, 3).map((factor) => (
-              <p key={factor.label}>
-                {factor.label}: {factor.score}/100
-              </p>
-            ))}
           </div>
         </section>
 
