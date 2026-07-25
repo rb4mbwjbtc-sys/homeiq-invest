@@ -70,6 +70,7 @@ const initial: AnalysisInput = {
   interestRate: 1.5,
   amortizationRate: 1,
   monthlyRent: 0,
+  parkingMonthlyRent: 0,
   annualOperatingCosts: 0,
   annualMaintenance: 0,
   livingArea: 0,
@@ -122,7 +123,7 @@ export function NewAnalysis() {
       ...form,
       livingArea: form.rentalUnits.reduce((sum, unit) => sum + unit.livingArea, 0),
       monthlyRent: form.rentalUnits.reduce(
-        (sum, unit) => sum + unit.currentMonthlyRent,
+        (sum, unit) => sum + unit.currentMonthlyRent + (unit.parkingMonthlyRent || 0),
         0,
       ),
     };
@@ -246,7 +247,7 @@ export function NewAnalysis() {
       }));
       return;
     }
-    set("monthlyRent", Math.round(generatedMarket.estimatedMonthlyMarketRent));
+    set("monthlyRent", Math.max(0, Math.round(generatedMarket.estimatedMonthlyMarketRent - (form.parkingMonthlyRent || 0))));
   };
 
   const submit = () => {
@@ -255,7 +256,7 @@ export function NewAnalysis() {
     const monthlyRent =
       form.propertyType === "mfh"
         ? form.rentalUnits.reduce((sum, unit) => sum + unit.currentMonthlyRent, 0)
-        : form.monthlyRent;
+        : form.monthlyRent + (form.parkingMonthlyRent || 0);
     const livingArea =
       form.propertyType === "mfh"
         ? form.rentalUnits.reduce((sum, unit) => sum + unit.livingArea, 0)
@@ -277,7 +278,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V2.3</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V2.8</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit Lageanalyse, Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -883,24 +884,34 @@ export function NewAnalysis() {
             </label>
 
             {form.propertyType !== "mfh" ? (
-              <label className="full">
-                Nettomiete Wohnung / Monat
-                <input
-                  type="number"
-                  value={form.monthlyRent || ""}
-                  onChange={(event) => {
-                    set("monthlyRent", Number(event.target.value));
-                    setMarketRentGenerated(null);
-                  }}
-                />
-              </label>
+              <>
+                <label>
+                  Nettomiete Objekt / Monat
+                  <input
+                    type="number"
+                    value={form.monthlyRent || ""}
+                    onChange={(event) => {
+                      set("monthlyRent", Number(event.target.value));
+                      setMarketRentGenerated(null);
+                    }}
+                  />
+                </label>
+                <label>
+                  Parkplatzmiete gesamt / Monat
+                  <input
+                    type="number"
+                    value={form.parkingMonthlyRent || ""}
+                    onChange={(event) => set("parkingMonthlyRent", Number(event.target.value))}
+                  />
+                </label>
+              </>
             ) : (
               <div className="full rent-total">
                 <span>Aktuelle Nettomiete MFH / Monat</span>
                 <strong>
                   {money(
                     form.rentalUnits.reduce(
-                      (sum, unit) => sum + unit.currentMonthlyRent,
+                      (sum, unit) => sum + unit.currentMonthlyRent + (unit.parkingMonthlyRent || 0),
                       0,
                     ),
                   )}

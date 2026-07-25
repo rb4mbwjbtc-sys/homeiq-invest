@@ -57,8 +57,8 @@ export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
   const totalInvestment = input.purchasePrice + input.ancillaryCosts;
   const mortgage = Math.max(totalInvestment - input.equity, 0);
   const monthlyRent = input.propertyType === "mfh" && input.rentalUnits.length
-    ? input.rentalUnits.reduce((sum, unit) => sum + unit.currentMonthlyRent, 0)
-    : input.monthlyRent;
+    ? input.rentalUnits.reduce((sum, unit) => sum + unit.currentMonthlyRent + (unit.parkingMonthlyRent || 0), 0)
+    : input.monthlyRent + (input.parkingMonthlyRent || 0);
   const annualRent = monthlyRent * 12;
   const grossYield = totalInvestment > 0 ? (annualRent / totalInvestment) * 100 : 0;
   const netIncomeBeforeFinancing = annualRent - input.annualOperatingCosts - input.annualMaintenance;

@@ -42,6 +42,7 @@ export type AnalysisInput = {
   interestRate: number;
   amortizationRate: number;
   monthlyRent: number;
+  parkingMonthlyRent: number;
   annualOperatingCosts: number;
   annualMaintenance: number;
   livingArea: number;

@@ -32,10 +32,11 @@ const areaFactor = (area: number) => area < 45 ? 1.10 : area < 70 ? 1.05 : area 
 function unitRent(unit: RentalUnit, fallbackBenchmark: number): UnitMarketRentResult {
   const benchmark = unit.marketRentPerSqm > 0 ? unit.marketRentPerSqm : fallbackBenchmark;
   const adjustedMarketRentPerSqm = benchmark * floorFactor(unit.floor) * conditionFactor(unit.condition) * qualityFactor(unit.quality) * featureFactor(unit.features) * areaFactor(unit.livingArea);
-  const estimatedMonthlyMarketRent = adjustedMarketRentPerSqm * unit.livingArea + unit.parkingMonthlyRent;
-  const differenceMonthly = estimatedMonthlyMarketRent - unit.currentMonthlyRent;
-  const differencePercent = unit.currentMonthlyRent > 0 ? differenceMonthly / unit.currentMonthlyRent * 100 : 0;
-  return { ...unit, adjustedMarketRentPerSqm, estimatedMonthlyMarketRent, differenceMonthly, differencePercent };
+  const estimatedMonthlyMarketRent = adjustedMarketRentPerSqm * unit.livingArea + (unit.parkingMonthlyRent || 0);
+  const currentMonthlyRent = unit.currentMonthlyRent + (unit.parkingMonthlyRent || 0);
+  const differenceMonthly = estimatedMonthlyMarketRent - currentMonthlyRent;
+  const differencePercent = currentMonthlyRent > 0 ? differenceMonthly / currentMonthlyRent * 100 : 0;
+  return { ...unit, currentMonthlyRent, adjustedMarketRentPerSqm, estimatedMonthlyMarketRent, differenceMonthly, differencePercent };
 }
 
 export function analyseMarket(input: AnalysisInput, location: LocationAnalysis): MarketAnalysis {
@@ -56,7 +57,7 @@ export function analyseMarket(input: AnalysisInput, location: LocationAnalysis):
   const estimatedMonthlyMarketRent = units.length
     ? units.reduce((sum, unit) => sum + unit.estimatedMonthlyMarketRent, 0)
     : input.regionalMarketRentPerSqm * input.livingArea * floorFactor(input.floor) * condition * quality * featureFactor(input.features) * areaFactor(input.livingArea) + input.parkingSpaces * 120;
-  const currentMonthlyRent = units.length ? units.reduce((sum, unit) => sum + unit.currentMonthlyRent, 0) : input.monthlyRent;
+  const currentMonthlyRent = units.length ? units.reduce((sum, unit) => sum + unit.currentMonthlyRent, 0) : input.monthlyRent + (input.parkingMonthlyRent || 0);
   const rentDifferenceMonthly = estimatedMonthlyMarketRent - currentMonthlyRent;
   const rentDifferencePercent = currentMonthlyRent > 0 ? rentDifferenceMonthly / currentMonthlyRent * 100 : 0;
   const rentRating = rentDifferencePercent >= 6 ? "Mietsteigerungspotenzial" : rentDifferencePercent <= -6 ? "Aktuelle Miete über Marktniveau" : "Miete auf Marktniveau";

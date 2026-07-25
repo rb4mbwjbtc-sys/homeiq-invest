@@ -67,8 +67,8 @@ function TileMap({ coordinates, address, print }: { coordinates: Coordinates; ad
 
   const tiles = useMemo(() => {
     const output: Array<{ x: number; y: number; col: number; row: number }> = [];
-    for (let row = 0; row < 3; row += 1) {
-      for (let col = 0; col < 3; col += 1) {
+    for (let row = 0; row < 4; row += 1) {
+      for (let col = 0; col < 4; col += 1) {
         output.push({ x: baseX + col, y: baseY + row, col, row });
       }
     }
@@ -94,9 +94,10 @@ function TileMap({ coordinates, address, print }: { coordinates: Coordinates; ad
           {tiles.map((tile) => (
             <img
               key={`${tile.x}-${tile.y}`}
-              src={`https://a.basemaps.cartocdn.com/light_all/${ZOOM}/${tile.x}/${tile.y}.png`}
+              src={`https://tile.openstreetmap.org/${ZOOM}/${tile.x}/${tile.y}.png`}
               alt=""
               crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
               style={{ left: tile.col * TILE_SIZE, top: tile.row * TILE_SIZE }}
             />
           ))}

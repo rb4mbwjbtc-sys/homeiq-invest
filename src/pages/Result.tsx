@@ -113,7 +113,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2.8</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V2.5</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -361,6 +361,7 @@ export function Result() {
               ["Zinskosten / Jahr", money(result.annualInterest)],
               ["Amortisation / Jahr", money(result.annualAmortization)],
               ["Jahresmietertrag", money(result.annualRent)],
+              ["Parkplatzmiete / Monat", money(input.propertyType === "mfh" ? input.rentalUnits.reduce((sum, unit) => sum + (unit.parkingMonthlyRent || 0), 0) : (input.parkingMonthlyRent || 0))],
               ["Bruttorendite", percent(result.grossYield)],
               ["Wohnfläche", `${number(input.livingArea)} m²`],
             ].map(([label, value]) => (
@@ -385,7 +386,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V2.8</span></div>
             <h1>{input.title}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
@@ -519,6 +520,11 @@ export function Result() {
             <h2>LAGE</h2>
             <div className="print-location-score">{location.score}/100 · {location.rating}</div>
             <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} print />
+            {location.factors.slice(0, 3).map((factor) => (
+              <p key={factor.label}>
+                {factor.label}: {factor.score}/100
+              </p>
+            ))}
           </div>
         </section>
 

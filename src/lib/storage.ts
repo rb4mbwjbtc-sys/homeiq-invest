@@ -1,6 +1,7 @@
 import type { AnalysisInput, RentalUnit } from "../types";
 const KEY = "homeiq-analyses-v1";
 const defaults: Partial<AnalysisInput> = {
+  parkingMonthlyRent: 0,
   location: { publicTransportMinutes: 6, shoppingMinutes: 8, schoolMinutes: 10, motorwayMinutes: 12, noiseLevel: 25, municipalityDemand: 70, vacancyRisk: 20, microLocation: 70 },
   condition: "gepflegt",
   quality: "durchschnittlich",
