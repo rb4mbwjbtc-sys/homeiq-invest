@@ -489,7 +489,7 @@ img,svg,iframe{max-width:100%}
 .print-report.pdf-capture .print-metrics strong{font-size:10px!important;white-space:nowrap}
 .print-report.pdf-capture .print-metrics span{font-size:7.5px!important;white-space:nowrap}
 
-/* V3.2 – Schweizer Open-Data-Lageanalyse */
+/* V3.1 – Schweizer Open-Data-Lageanalyse */
 .open-data-error {
   margin: 14px 0;
   padding: 13px 15px;
@@ -599,7 +599,7 @@ img,svg,iframe{max-width:100%}
   .open-data-sources > div { grid-template-columns: 1fr; gap: 2px; }
 }
 
-/* V3.2 – adaptive Open-Data radius and transparent missing values */
+/* V3.1 – adaptive Open-Data radius and transparent missing values */
 .open-data-radius {
   margin: 12px 0 0;
   padding: 10px 12px;
@@ -610,3 +610,35 @@ img,svg,iframe{max-width:100%}
   line-height: 1.45;
 }
 .open-data-evidence-grid strong { overflow-wrap: anywhere; }
+
+/* V4.0 – federated Swiss Data Gateway */
+.open-data-market-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.open-data-market-summary > div {
+  display: grid;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f7fbf9;
+}
+.open-data-market-summary span { color: var(--muted); font-size: 12px; font-weight: 700; }
+.open-data-market-summary strong { color: var(--green-dark); font-size: 17px; }
+.open-data-market-summary small { color: var(--muted); line-height: 1.4; }
+.data-tier-details { margin-top: 12px; }
+.market-data-unavailable {
+  display: block;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff8e6;
+  color: #765b12;
+  line-height: 1.45;
+}
+@media (max-width: 680px) {
+  .open-data-market-summary { grid-template-columns: 1fr; }
+}

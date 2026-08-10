@@ -197,6 +197,8 @@ export function NewAnalysis() {
         ...previous,
         location: report.metrics,
         marketDataRadiusKm: Math.min(10, Math.max(previous.marketDataRadiusKm, report.evidence.searchRadiusKm || 1)),
+        regionalMarketPricePerSqm: report.market.pricePerSqm ?? previous.regionalMarketPricePerSqm,
+        regionalMarketRentPerSqm: report.market.rentPerSqm ?? previous.regionalMarketRentPerSqm,
         openDataLocation: {
           address: report.address,
           building: report.building,
@@ -205,6 +207,7 @@ export function NewAnalysis() {
           missing: report.missing,
           loadedAt: report.loadedAt,
           sources: report.sources,
+          market: report.market,
         },
       }));
       setLocationLoaded(true);
@@ -277,7 +280,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V3.2</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V4.0</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit Lageanalyse, Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -662,7 +665,35 @@ export function NewAnalysis() {
                     {form.openDataLocation.building?.egid && <div><span>EGID</span><strong>{form.openDataLocation.building.egid}</strong></div>}
                     {form.openDataLocation.building?.constructionYear && <div><span>GWR-Baujahr</span><strong>{form.openDataLocation.building.constructionYear}</strong></div>}
                   </div>
-                  <p className="open-data-radius">Automatische Umkreissuche: bis {form.openDataLocation.evidence.searchRadiusKm || 10} km. Der Radius wurde je Datenkategorie schrittweise erweitert.</p>
+                  <div className="open-data-market-summary">
+                    <div>
+                      <span>Marktpreis-Benchmark</span>
+                      <strong>{form.openDataLocation.market?.pricePerSqm != null ? `CHF ${form.openDataLocation.market?.pricePerSqm.toLocaleString("de-CH")} / m²` : "nicht verfügbar"}</strong>
+                      <small>{form.openDataLocation.market?.priceSource || "Kein belastbarer öffentlicher lokaler Preisbenchmark gefunden"}</small>
+                    </div>
+                    <div>
+                      <span>Marktmiet-Benchmark</span>
+                      <strong>{form.openDataLocation.market?.rentPerSqm != null ? `CHF ${form.openDataLocation.market?.rentPerSqm.toFixed(2)} / m² / Monat` : "nicht verfügbar"}</strong>
+                      <small>{form.openDataLocation.market?.rentSource || "Kein belastbarer öffentlicher lokaler Mietbenchmark gefunden"}</small>
+                    </div>
+                  </div>
+                  <details className="open-data-sources data-tier-details">
+                    <summary>HomeIQ Datenebenen 1–3</summary>
+                    {(form.openDataLocation.market?.tiers || []).map((tier) => (
+                      <div key={`${tier.tier}-${tier.name}`}>
+                        <strong>Ebene {tier.tier}: {tier.name}</strong>
+                        <span>{tier.detail}</span>
+                      </div>
+                    ))}
+                    {(form.openDataLocation.market?.discoveredDatasets?.length || 0) > 0 && (
+                      <div>
+                        <strong>Gefundene lokale Open-Data-Datensätze</strong>
+                        <span>{(form.openDataLocation.market?.discoveredDatasets || []).map((dataset) => dataset.title).join(" · ")}</span>
+                      </div>
+                    )}
+                    <small>{form.openDataLocation.market?.note}</small>
+                  </details>
+                  <p className="open-data-radius">Automatische Umkreissuche: bis {form.openDataLocation.evidence.searchRadiusKm || 10} km. Fehlende Teilwerte werden transparent ausgewiesen und nicht erfunden.</p>
                   {form.openDataLocation.missing.length > 0 && (
                     <p className="open-data-missing">Nicht verfügbare Teilwerte: {form.openDataLocation.missing.join(", ")}. Für diese Faktoren werden keine erfundenen Distanzen angezeigt; im Score werden sie neutral gewichtet.</p>
                   )}
@@ -839,10 +870,13 @@ export function NewAnalysis() {
               <button
                 className="market-action-button"
                 onClick={generateMarketValue}
-                disabled={!locationLoaded}
+                disabled={!locationLoaded || form.regionalMarketPricePerSqm <= 0}
               >
                 <Sparkles size={20} /> Optimalen Kaufpreis berechnen (Premium)
               </button>
+              {locationLoaded && form.regionalMarketPricePerSqm <= 0 && (
+                <small className="market-data-unavailable">Noch kein belastbarer öffentlicher Marktpreis-Benchmark verfügbar. HomeIQ berechnet bewusst keinen erfundenen Marktwert. Ebene 3 ist vorbereitet, aber ohne offiziellen Zugang deaktiviert.</small>
+              )}
               {marketValueGenerated !== null && generatedMarket && (
                 <div className="market-calculation-card">
                   <div className="market-card-heading">
@@ -890,7 +924,7 @@ export function NewAnalysis() {
                     Ausstattungsmerkmale.
                   </p>
                   <small className="market-source">
-                    Modellbasierte Vergleichswerte im Umkreis von {form.marketDataRadiusKm} km · Datenqualität: {generatedMarket.confidence}
+                    Datenbasis: {form.openDataLocation?.market.priceSource || "öffentliche Marktdaten"} · Datenqualität: {form.openDataLocation?.market.confidence || generatedMarket.confidence}
                   </small>
                 </div>
               )}
@@ -964,10 +998,13 @@ export function NewAnalysis() {
               <button
                 className="market-action-button"
                 onClick={generateMarketRent}
-                disabled={!locationLoaded}
+                disabled={!locationLoaded || form.regionalMarketRentPerSqm <= 0}
               >
                 <Sparkles size={20} /> Marktmiete automatisch berechnen (Premium)
               </button>
+              {locationLoaded && form.regionalMarketRentPerSqm <= 0 && (
+                <small className="market-data-unavailable">Noch kein belastbarer öffentlicher Marktmiet-Benchmark verfügbar. HomeIQ erfindet keine Ersatzmiete; lokale/kantonale Open Data werden automatisch gesucht.</small>
+              )}
               {marketRentGenerated !== null && generatedMarket && (
                 <div className="market-calculation-card rent-card">
                   <div className="market-card-heading">
@@ -1000,7 +1037,7 @@ export function NewAnalysis() {
                     Zustand, Ausbaustandard, Ausstattung und Parkierung.
                   </p>
                   <small className="market-source">
-                    Modellbasierte Vergleichswerte im Umkreis von {form.marketDataRadiusKm} km · Datenqualität: {generatedMarket.confidence}
+                    Datenbasis: {form.openDataLocation?.market.rentSource || "öffentliche Marktdaten"} · Datenqualität: {form.openDataLocation?.market.confidence || generatedMarket.confidence}
                   </small>
                   {form.propertyType === "mfh" && (
                     <div className="unit-market-rent-preview">

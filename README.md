@@ -1,43 +1,48 @@
-# HomeIQ Independent V3.2
+# HomeIQ Independent V4.0 – Federated Swiss Data Gateway
 
-V3.2 stabilisiert die automatische Schweizer Open-Data-Lageanalyse aus V3.1.
+V4.0 baut technisch auf V3.1 auf und ersetzt die Idee einer selbst zu pflegenden Schweizer Voll-Datenbank durch eine föderierte Quellenarchitektur.
 
-## Hauptverbesserungen
+## Datenebene 1 – schweizweite offene/amtliche Quellen
 
-- Gesamtes serverseitiges Zeitlimit von 9 Sekunden
-- Clientseitiger Abbruch nach 12 Sekunden: kein unendlicher Ladezustand
-- Externe Quellen werden weitgehend parallel abgefragt
-- `Promise.allSettled`-ähnliche Teilresultate: einzelne Ausfälle blockieren nicht die ganze Analyse
-- GeoAdmin bleibt die primäre Quelle für Adresse, Gemeinde, GWR, ÖV-Güteklasse und Lärm
-- Nächstgelegene ÖV-Haltestelle über die Schweizer Transport API
-- POI-Suche für Einkauf, Schule/Betreuung und Autobahn in einer einzigen, begrenzten Abfrage bis 10 km
-- Zwei parallele Overpass-Endpunkte; der erste erfolgreiche Datensatz wird verwendet
-- BFS-Leerstand mit kurzem Timeout; bei Ausfall bleiben andere Daten verfügbar
-- Cache im Browser für 30 Tage
-- zusätzlicher kurzlebiger Server-/CDN-Cache
-- transparente Statusdaten je Quelle
-- keine simulierten Distanzen in der Benutzeroberfläche
+Aktiv eingebunden:
 
-## Verhalten bei Teilausfällen
+- swisstopo / GeoAdmin: Adresse, Koordinaten, Gemeinde
+- BFS / GWR: Gebäudedaten und Leerwohnungsziffer
+- ARE: ÖV-Güteklasse
+- BAFU: Strassen- und Bahnlärm
+- OpenTransportData / transport.opendata.ch: nächster ÖV-Servicepunkt
+- OpenStreetMap als nicht blockierender Fallback für Einkauf, Schule/Betreuung und Autobahn
 
-Die Analyse liefert verfügbare Resultate zurück. Fehlende Teilwerte werden als „nicht verfügbar“ angezeigt und im Score neutral behandelt. Eine langsame oder ausgefallene Quelle hält die App nicht mehr dauerhaft im Ladezustand.
+ESTV ist in der Quellenmatrix vorgesehen. V4.0 verwendet bewusst keinen undokumentierten Webseiten-Scraper für den Steuerrechner.
 
-## Datenquellen
+## Datenebene 2 – kantonale und kommunale Open Data
 
-- swisstopo / GeoAdmin
-- ARE ÖV-Güteklassen
-- BAFU Lärmdaten
-- BFS Leerwohnungszählung
-- Transport API Schweiz
-- OpenStreetMap / Overpass
+HomeIQ durchsucht automatisiert den Metadatenkatalog von opendata.swiss nach lokalen Miet- und Immobilienpreisdaten. Wo ein unterstützter offener Datensatz verfügbar ist, wird der Benchmark automatisch übernommen.
 
-Marktmiete und Marktwert bleiben in V3.2 noch modellbasiert.
+Als erster konkreter Adapter sind offene Zürcher Miet-/Transaktionsdaten vorgesehen. Fehlende Werte werden nicht erfunden.
 
-## Optionaler persistenter Cache mit Supabase
+## Datenebene 3 – kommerzielle Marktdaten
 
-V3.2 funktioniert auch ohne Supabase. Für einen geräteübergreifenden 30-Tage-Cache kann später `supabase/location_cache.sql` im eigenen Supabase-Projekt ausgeführt werden. Anschliessend werden in Vercel nur serverseitig gesetzt:
+Die Architektur enthält die Quellenhierarchie für:
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- Raiffeisen Gemeindeinfo
+- ImmoScout24 / SMG
+- Comparis Immobilien
 
-Der Service-Role-Key wird nie an den Browser ausgeliefert. Fällt Supabase aus oder ist es nicht konfiguriert, läuft die Analyse weiterhin über Browser-, CDN- und In-Memory-Cache.
+Diese Adapter sind in V4.0 bewusst deaktiviert, solange kein offizieller API-/Lizenzzugang besteht. Es wird kein automatisiertes Scraping eingebaut.
+
+## Verhalten bei fehlenden Marktdaten
+
+Wenn Ebene 1 und 2 keinen belastbaren lokalen CHF/m²- oder Miet-Benchmark liefern, bleiben Marktwert bzw. Marktmiete deaktiviert. Die App zeigt transparent, welche Datenquellen gefunden wurden und warum keine Berechnung erfolgt. Dadurch werden keine scheinpräzisen Werte erfunden.
+
+## Performance
+
+- Client-Timeout für den Gesamtabruf: 12 Sekunden
+- Einzelquellen haben kurze Server-Timeouts
+- externe Quellen werden weitgehend parallel geladen
+- OpenStreetMap kann ausfallen, ohne die restliche Analyse zu blockieren
+- erfolgreiche Resultate werden im Vercel-/Memory-Cache zwischengespeichert
+
+## Deployment
+
+Wie bisher über GitHub → Vercel. Es sind für V4.0 keine neuen Environment Variables erforderlich.

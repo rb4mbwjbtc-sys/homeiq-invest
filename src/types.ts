@@ -31,6 +31,25 @@ export type LocationInputs = {
 
 export type OpenDataSource = { name: string; detail: string };
 
+export type DataSourceTierStatus = {
+  tier: 1 | 2 | 3;
+  name: string;
+  status: "verwendet" | "gefunden" | "nicht_verfuegbar" | "vorbereitet";
+  detail: string;
+};
+
+export type OpenDataMarketReport = {
+  pricePerSqm: number | null;
+  rentPerSqm: number | null;
+  priceSource: string | null;
+  rentSource: string | null;
+  confidence: "hoch" | "mittel" | "eingeschränkt";
+  radiusKm: number | null;
+  discoveredDatasets: Array<{ title: string; publisher: string; url: string; kind: "price" | "rent" | "other" }>;
+  tiers: DataSourceTierStatus[];
+  note: string;
+};
+
 export type OpenDataLocationReport = {
   address: {
     formatted: string;
@@ -69,13 +88,7 @@ export type OpenDataLocationReport = {
   missing: string[];
   loadedAt: string;
   sources: OpenDataSource[];
-  cache?: { hit: boolean; ttlDays: number };
-  sourceStatus?: Array<{
-    name: string;
-    status: "loaded" | "unavailable" | "timeout" | "error";
-    durationMs: number;
-    error: string | null;
-  }>;
+  market: OpenDataMarketReport;
 };
 
 export type AnalysisInput = {
