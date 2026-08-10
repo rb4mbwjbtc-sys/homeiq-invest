@@ -75,14 +75,18 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
   const weights = [0.16, 0.10, 0.08, 0.08, 0.14, 0.18, 0.14, 0.12];
   const availableWeight = raw.reduce((sum, factor, index) => sum + (factor.available ? weights[index] : 0), 0);
   const weightedScore = raw.reduce((sum, factor, index) => sum + (factor.available ? factor.score * weights[index] : 0), 0);
-  const score = availableWeight > 0 ? Math.round(weightedScore / availableWeight) : 50;
+  const observedScore = availableWeight > 0 ? weightedScore / availableWeight : 50;
+  // Bei geringer Datenabdeckung darf ein einzelner guter Faktor (z.B. ÖV) nicht zu 100/100 Lage führen.
+  // Wir ziehen die Aussage kontrolliert Richtung neutral (50), bis genügend echte Faktoren vorhanden sind.
+  const confidence = clamp(availableWeight, 0, 1);
+  const score = Math.round(observedScore * confidence + 50 * (1 - confidence));
   const factors = raw.map((factor) => ({
     label: factor.label,
     score: factor.available ? factor.score : 0,
     detail: factor.available ? factor.detail : "Nicht verfügbar",
   }));
   const availableFactors = raw.filter((factor) => factor.available).length;
-  const dataCoverage = Math.round((availableFactors / raw.length) * 100);
+  const dataCoverage = Math.round(availableWeight * 100);
   const strengths = factors.filter((factor) => factor.score >= 75 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
   const risks = factors.filter((factor) => factor.score > 0 && factor.score < 50 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
   const rating = score >= 80 ? "Sehr gute Lage" : score >= 65 ? "Gute Lage" : score >= 50 ? "Durchschnittliche Lage" : "Schwache Lage";

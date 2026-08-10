@@ -39,7 +39,7 @@ function objectQualityScore(input: AnalysisInput) {
 
 function marketabilityScore(input: AnalysisInput) {
   let score = 38;
-  const f = new Set(input.features.map((item) => item.toLowerCase()));
+  const f = new Set((Array.isArray(input.features) ? input.features : []).map((item) => item.toLowerCase()));
   if ([...f].some((x) => x.includes("balkon") || x.includes("terrasse") || x.includes("garten"))) score += 10;
   if ([...f].some((x) => x.includes("lift"))) score += 7;
   if (input.parkingSpaces > 0) score += Math.min(12, 6 + input.parkingSpaces * 2);

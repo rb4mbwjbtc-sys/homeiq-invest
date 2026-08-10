@@ -731,3 +731,25 @@ img,svg,iframe{max-width:100%}
 .print-report.pdf-capture .print-header>.homeiq-score-card.print-mode .homeiq-score-rating{margin-top:1px!important}
 
 @media(max-width:820px){.location-market-actions{margin-top:16px;padding-top:16px}.location-badge{white-space:normal;text-align:right}}
+
+/* HomeIQ V4.3 – saved-analysis resilience and PDF parity */
+.analysis-card-invalid{border-color:#eadfca;background:#fffaf0}
+.analysis-card-invalid .analysis-main-link p{max-width:650px;color:#77664c}
+.coverage-warning{padding:10px 12px;border:1px solid #eadfca;border-radius:10px;background:#fffaf0;color:#6e6047}
+
+/* Dedicated PDF score badge: fixed SVG geometry, independent from responsive web card CSS. */
+.print-score-badge{box-sizing:border-box;width:150px;height:150px;padding:9px 8px 8px;border-radius:14px;background:radial-gradient(circle at 50% 20%,#0b5b4f 0%,#073f38 62%,#06352f 100%);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:hidden}
+.print-score-ring-fixed{position:relative;flex:0 0 104px;width:104px;height:104px;margin:0 auto}
+.print-score-ring-fixed svg{display:block;width:104px;height:104px;overflow:visible}
+.print-score-ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1}
+.print-score-ring-center strong{font-size:31px;line-height:.9;letter-spacing:-.04em}
+.print-score-ring-center span{font-size:7px;color:#d4e8e0;margin-top:4px}
+.print-score-name{width:100%;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:1px;color:#bce6d3;font-size:5.8px;letter-spacing:.19em;font-weight:850;white-space:nowrap}
+.print-score-name:before,.print-score-name:after{content:"";width:18px;height:1px;background:#8dcbb3}
+.print-score-rating-fixed{max-width:134px;display:flex;align-items:center;justify-content:center;gap:4px;margin-top:3px;padding:3px 6px;border:1px solid rgba(195,235,218,.22);border-radius:999px;font-size:5.6px;font-weight:750;line-height:1.1;text-align:center}
+.print-score-rating-fixed i{width:4px;height:4px;flex:0 0 4px;border-radius:50%}
+.print-report.pdf-capture .print-header{grid-template-columns:minmax(0,1fr) 150px!important;align-items:start!important}
+.print-report.pdf-capture .print-header>.print-score-badge{justify-self:end!important;align-self:start!important}
+
+/* PDF must use exactly the same computed values as the web report; only the layout is condensed. */
+.print-report.pdf-capture .print-location-score small{display:block;margin-top:2px;font-size:7px!important;color:#637a73}

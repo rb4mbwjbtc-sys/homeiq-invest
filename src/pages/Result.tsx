@@ -7,6 +7,7 @@ import { findAnalysis } from "../lib/storage";
 import { money, number, percent } from "../lib/format";
 import { scoreColor } from "../lib/scoreColor";
 import { HomeIQScoreCard } from "../components/HomeIQScoreCard";
+import { PrintScoreBadge } from "../components/PrintScoreBadge";
 import { OpenStreetMapCard } from "../components/OpenStreetMapCard";
 import homeIqLogo from "../assets/homeiq-logo.jpg";
 
@@ -113,7 +114,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V4.2</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V4.3</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -130,7 +131,7 @@ export function Result() {
             ["Cashflow / Monat", money(result.monthlyCashflow)],
             ["Marktwert", market.marketValueAvailable ? money(market.estimatedMarketValue) : "Nicht verfügbar"],
             ["Marktmiete / Monat", market.marketRentAvailable ? money(market.estimatedMonthlyMarketRent) : "Nicht verfügbar"],
-            ["Lage", `${location.score}/100`],
+            ["Lage", `${location.score}/100 · ${location.dataCoverage}% Daten`],
           ].map(([label, value]) => (
             <article className="kpi" key={label}>
               <span>{label}</span>
@@ -162,6 +163,7 @@ export function Result() {
           <article className="panel">
             <span className="eyebrow">GESAMTBEURTEILUNG</span>
             <h2>{result.rating}</h2>
+            {location.dataCoverage < 50 && <p className="coverage-warning"><strong>Lage-Datenabdeckung nur {location.dataCoverage}%.</strong> Die Lagebeurteilung ist deshalb nur eingeschränkt belastbar.</p>}
             <p>
               Die Analyse kombiniert Rendite, Finanzierung und Lagequalität. {market.marketValueAvailable ? <>Der belastbar geschätzte Marktwert liegt bei <strong>{money(market.estimatedMarketValue)}</strong>. </> : <>Für den Marktwert liegen aktuell keine ausreichend belastbaren Vergleichsdaten vor. </>}{market.marketRentAvailable ? <>Die aktuelle Miete weicht um <strong>{percent(market.rentDifferencePercent)}</strong> vom geschätzten Marktniveau ab.</> : <>Eine Marktmietschätzung wird ohne belastbaren Benchmark bewusst nicht ausgegeben.</>}
             </p>
@@ -297,13 +299,13 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V4.2</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V4.3</span></div>
             <h1>{input.title}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
             </p>
           </div>
-          <HomeIQScoreCard score={result.score} rating={result.rating} compact print />
+          <PrintScoreBadge score={result.score} rating={result.rating} />
         </header>
 
         <div className="print-recommendation">{result.recommendation}</div>

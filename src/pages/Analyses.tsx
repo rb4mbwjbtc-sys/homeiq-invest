@@ -3,10 +3,18 @@ import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { deleteAnalysis, loadAnalyses } from "../lib/storage";
 import { calculateAnalysis } from "../lib/calculations";
+import type { AnalysisInput, AnalysisResult } from "../types";
 import { money, percent } from "../lib/format";
 
 type SortKey = "date" | "score" | "purchasePrice" | "netYield" | "grossYield" | "cashflow";
 type SortDirection = "desc" | "asc";
+
+const safeCalculate = (item: AnalysisInput): AnalysisResult | null => {
+  try { return calculateAnalysis(item); } catch (error) {
+    console.error("Gespeicherte Analyse konnte nicht berechnet werden", item.id, error);
+    return null;
+  }
+};
 
 export function Analyses() {
   const [items, setItems] = useState(loadAnalyses());
@@ -21,8 +29,11 @@ export function Analyses() {
 
   const sortedItems = useMemo(() => {
     return [...items].sort((a, b) => {
-      const ar = calculateAnalysis(a);
-      const br = calculateAnalysis(b);
+      const ar = safeCalculate(a);
+      const br = safeCalculate(b);
+      if (!ar && !br) return 0;
+      if (!ar) return 1;
+      if (!br) return -1;
       const values: Record<SortKey, [number, number]> = {
         date: [new Date(a.createdAt).getTime(), new Date(b.createdAt).getTime()],
         score: [ar.score, br.score],
@@ -74,7 +85,22 @@ export function Analyses() {
       ) : (
         <div className="analysis-list">
           {sortedItems.map((item) => {
-            const result = calculateAnalysis(item);
+            const result = safeCalculate(item);
+            if (!result) {
+              return (
+                <article className="analysis-card analysis-card-invalid" key={item.id}>
+                  <div className="analysis-main-link">
+                    <span className="eyebrow">GESPEICHERTE ANALYSE</span>
+                    <h2>{item.title || "Unbenannte Analyse"}</h2>
+                    <p>Diese ältere Analyse enthält unvollständige Daten. Sie kann bearbeitet oder gelöscht werden.</p>
+                  </div>
+                  <div className="analysis-card-actions">
+                    <Link className="button secondary compact-button" to={`/analyse/${item.id}`}><Pencil size={16} /> Bearbeiten</Link>
+                    <button className="icon-button danger" onClick={() => remove(item.id)} aria-label="Analyse löschen"><Trash2 size={18} /></button>
+                  </div>
+                </article>
+              );
+            }
             return (
               <article className="analysis-card" key={item.id}>
                 <Link className="analysis-main-link" to={`/ergebnis/${item.id}`}>

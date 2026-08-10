@@ -6,6 +6,7 @@ const OPENDATA_SEARCH = "https://ckan.opendata.swiss/api/3/action/package_search
 const OVERPASS_ENDPOINTS = [
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
 ];
 
 let vacancyMetadataCache = null;
@@ -32,7 +33,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4500) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/4.2 (Swiss real-estate analysis; public/open data gateway)",
+        "User-Agent": "HomeIQ-Invest/4.3 (Swiss real-estate analysis; public/open data gateway)",
         ...(options.headers || {}),
       },
     });
@@ -52,7 +53,7 @@ async function fetchText(url, options = {}, timeoutMs = 4500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,*/*",
-        "User-Agent": "HomeIQ-Invest/4.2 (Swiss real-estate analysis; public/open data gateway)",
+        "User-Agent": "HomeIQ-Invest/4.3 (Swiss real-estate analysis; public/open data gateway)",
         ...(options.headers || {}),
       },
     });
@@ -198,9 +199,13 @@ async function overpassSearch(geo, kind, radiusMeters, timeoutMs = 3300) {
     body: new URLSearchParams({ data: query }).toString(),
   }, timeoutMs));
   try {
-    const payload = await Promise.any(requests);
+    // Nicht die erste erfolgreiche Antwort blind übernehmen: einzelne öffentliche
+    // Overpass-Instanzen liefern unter Last gelegentlich leere Teilantworten.
+    // Wir werten deshalb alle rechtzeitig erfolgreichen Antworten aus und mergen Treffer.
+    const settled = await Promise.allSettled(requests);
+    const elements = settled.flatMap((entry) => entry.status === "fulfilled" ? (entry.value.elements || []) : []);
     let nearest = Infinity;
-    for (const element of payload.elements || []) {
+    for (const element of elements) {
       const lat = Number(element.lat ?? element.center?.lat);
       const lon = Number(element.lon ?? element.center?.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
