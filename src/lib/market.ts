@@ -44,7 +44,16 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
       available: evidence ? evidence.roadNoiseDb !== null || evidence.railNoiseDb !== null : true,
       score: Math.round(clamp(110 - l.noiseLevel)),
       detail: evidence && (evidence.roadNoiseDb !== null || evidence.railNoiseDb !== null)
-        ? `${Math.max(evidence.roadNoiseDb || 0, evidence.railNoiseDb || 0)} dB` : `${l.noiseLevel}/100 Belastung`,
+        ? (() => {
+            const db = Math.max(evidence.roadNoiseDb || 0, evidence.railNoiseDb || 0);
+            const roadDist = evidence.roadNoiseDistanceMeters ?? Infinity;
+            const railDist = evidence.railNoiseDistanceMeters ?? Infinity;
+            const dist = Math.min(roadDist, railDist);
+            const distLabel = Number.isFinite(dist) ? ` · ${Math.round(dist)} m` : "";
+            const impact = evidence.noiseImpactPercent != null ? ` · Einfluss ${evidence.noiseImpactPercent}%` : "";
+            return `${db} dB${distLabel}${impact}`;
+          })()
+        : `${l.noiseLevel}/100 Belastung`,
     },
     {
       label: "Nachfrage",

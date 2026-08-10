@@ -280,7 +280,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V4.6</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V4.7</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -660,7 +660,17 @@ export function NewAnalysis() {
                 <div><span>Schule / Betreuung</span><strong>{form.openDataLocation.evidence.nearestSchoolMeters !== null ? `${form.openDataLocation.evidence.nearestSchoolMeters} m` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.educationSource ? `${form.openDataLocation.evidence.educationSource}${form.openDataLocation.evidence.categoryRadiusKm?.school ? ` · bis ${form.openDataLocation.evidence.categoryRadiusKm.school} km` : ""}` : ""}</small></div>
                 <div><span>Autobahnanschluss</span><strong>{form.openDataLocation.evidence.nearestMotorwayJunctionMeters !== null ? `${form.openDataLocation.evidence.nearestMotorwayJunctionMeters} m` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.motorwaySource ? `${form.openDataLocation.evidence.motorwaySource}${form.openDataLocation.evidence.categoryRadiusKm?.motorway ? ` · bis ${form.openDataLocation.evidence.categoryRadiusKm.motorway} km` : ""}` : ""}</small></div>
                 <div><span>Leerwohnungsziffer</span><strong>{form.openDataLocation.evidence.vacancyRate !== null ? `${form.openDataLocation.evidence.vacancyRate.toFixed(2)} %` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.vacancySource || ""}</small></div>
-                <div><span>Lärm</span><strong>{Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0) ? `${Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0)} dB` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.noiseSource || ""}</small></div>
+                <div><span>Lärm</span><strong>{Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0) ? `${Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0)} dB` : "nicht verfügbar"}</strong><small>{(() => {
+                  const e = form.openDataLocation!.evidence;
+                  if (!e.noiseSource) return "";
+                  const road = [e.roadNoiseDayDb != null ? `T ${e.roadNoiseDayDb}` : "", e.roadNoiseNightDb != null ? `N ${e.roadNoiseNightDb}` : ""].filter(Boolean).join("/");
+                  const rail = [e.railNoiseDayDb != null ? `T ${e.railNoiseDayDb}` : "", e.railNoiseNightDb != null ? `N ${e.railNoiseNightDb}` : ""].filter(Boolean).join("/");
+                  const parts = [e.noiseSource];
+                  if (road) parts.push(`Strasse ${road} dB${e.roadNoiseDistanceMeters != null ? ` · ${Math.round(e.roadNoiseDistanceMeters)} m` : ""}`);
+                  if (rail) parts.push(`Bahn ${rail} dB${e.railNoiseDistanceMeters != null ? ` · ${Math.round(e.railNoiseDistanceMeters)} m` : ""}`);
+                  if (e.noiseImpactPercent != null) parts.push(`Einfluss ${e.noiseImpactPercent}%`);
+                  return parts.join(" · ");
+                })()}</small></div>
                 <div><span>Gebäude</span><strong>{form.openDataLocation.building?.constructionYear ? `Baujahr ${form.openDataLocation.building.constructionYear}` : form.openDataLocation.building?.egid ? `EGID ${form.openDataLocation.building.egid}` : "nicht verfügbar"}</strong></div>
               </div>
 

@@ -14,9 +14,12 @@ const LAYERS = {
   municipality: "ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill",
   gwr: "ch.bfs.gebaeude_wohnungs_register",
   transitClass: "ch.are.gueteklassen_oev",
-  roadNoise: "ch.bafu.laerm-strassenlaerm_tag",
-  railNoise: "ch.bafu.laerm-bahnlaerm_tag",
-  railNoiseEffective: "ch.bav.laermbelastung-eisenbahn_effektive_immissionen_tag",
+  roadNoiseDay: "ch.bafu.laerm-strassenlaerm_tag",
+  roadNoiseNight: "ch.bafu.laerm-strassenlaerm_nacht",
+  railNoiseDay: "ch.bafu.laerm-bahnlaerm_tag",
+  railNoiseNight: "ch.bafu.laerm-bahnlaerm_nacht",
+  railNoiseEffectiveDay: "ch.bav.laermbelastung-eisenbahn_effektive_immissionen_tag",
+  railNoiseEffectiveNight: "ch.bav.laermbelastung-eisenbahn_effektive_immissionen_nacht",
 };
 
 let vacancyMetadataCache = null;
@@ -43,7 +46,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4200) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/4.6 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/4.7 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -63,7 +66,7 @@ async function fetchText(url, options = {}, timeoutMs = 3500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,application/geo+json,application/json,*/*",
-        "User-Agent": "HomeIQ-Invest/4.6 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/4.7 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -152,20 +155,136 @@ async function identifyLayers(layerIds, geo, tolerance = 8, radiusMeters = 120) 
   return map;
 }
 
-async function identifyNoiseAdaptive(layer, geo) {
-  for (const spec of [
-    { tolerance: 0, radius: 50 },
-    { tolerance: 4, radius: 150 },
-    { tolerance: 8, radius: 300 },
-  ]) {
-    try {
-      const map = await identifyLayers([layer], geo, spec.tolerance, spec.radius);
-      if (map[layer]) return map[layer];
-    } catch {
-      // continue with a slightly larger official spatial query
-    }
+async function identifyNoiseEnvelope(layerIds, geo, radiusMeters) {
+  const r = Math.max(1, radiusMeters);
+  const minX = geo.easting - r;
+  const minY = geo.northing - r;
+  const maxX = geo.easting + r;
+  const maxY = geo.northing + r;
+  const params = new URLSearchParams({
+    geometry: `${minX},${minY},${maxX},${maxY}`,
+    geometryType: "esriGeometryEnvelope",
+    geometryFormat: "geojson",
+    sr: "2056",
+    imageDisplay: "1000,1000,96",
+    mapExtent: `${minX},${minY},${maxX},${maxY}`,
+    tolerance: "0",
+    layers: `all:${layerIds.join(",")}`,
+    returnGeometry: "true",
+    lang: "de",
+    limit: "200",
+  });
+  const payload = await fetchJson(`${GEOADMIN_IDENTIFY}?${params}`, {}, 3800);
+  return payload.results || [];
+}
+
+function minDistanceToBboxMeters(bbox, geo) {
+  if (!Array.isArray(bbox) || bbox.length < 4) return null;
+  const [minX, minY, maxX, maxY] = bbox.map(Number);
+  if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
+  const dx = geo.easting < minX ? minX - geo.easting : geo.easting > maxX ? geo.easting - maxX : 0;
+  const dy = geo.northing < minY ? minY - geo.northing : geo.northing > maxY ? geo.northing - maxY : 0;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function flattenCoordinates(value, out = []) {
+  if (!Array.isArray(value)) return out;
+  if (value.length >= 2 && Number.isFinite(Number(value[0])) && Number.isFinite(Number(value[1]))) {
+    out.push([Number(value[0]), Number(value[1])]);
+    return out;
   }
+  for (const child of value) flattenCoordinates(child, out);
+  return out;
+}
+
+function distanceToNoiseFeatureMeters(result, geo, fallbackRadius) {
+  const bboxDistance = minDistanceToBboxMeters(result?.bbox, geo);
+  if (bboxDistance != null) return Math.round(bboxDistance);
+  const geometry = result?.geometry;
+  const coords = flattenCoordinates(geometry?.coordinates || geometry?.rings || geometry?.paths || []);
+  if (coords.length) {
+    let nearest = Infinity;
+    for (const [x, y] of coords) nearest = Math.min(nearest, Math.hypot(x - geo.easting, y - geo.northing));
+    if (Number.isFinite(nearest)) return Math.round(nearest);
+  }
+  return Math.round(fallbackRadius);
+}
+
+function noiseDistanceWeight(distanceMeters) {
+  if (distanceMeters <= 25) return 1;
+  if (distanceMeters <= 50) return 0.90;
+  if (distanceMeters <= 100) return 0.70;
+  if (distanceMeters <= 250) return 0.40;
+  return 0;
+}
+
+function noiseBurden(db, distanceMeters) {
+  if (db == null) return null;
+  const rawBurden = clamp((db - 35) * 2.1);
+  return Math.round(rawBurden * noiseDistanceWeight(distanceMeters));
+}
+
+function noiseKeyForLayer(layer) {
+  if (layer === LAYERS.roadNoiseDay) return { key: "roadDay", type: "Strasse", period: "Tag", source: "BAFU / GeoAdmin", priority: 1 };
+  if (layer === LAYERS.roadNoiseNight) return { key: "roadNight", type: "Strasse", period: "Nacht", source: "BAFU / GeoAdmin", priority: 1 };
+  if (layer === LAYERS.railNoiseEffectiveDay) return { key: "railDay", type: "Bahn", period: "Tag", source: "BAV / GeoAdmin", priority: 2 };
+  if (layer === LAYERS.railNoiseEffectiveNight) return { key: "railNight", type: "Bahn", period: "Nacht", source: "BAV / GeoAdmin", priority: 2 };
+  if (layer === LAYERS.railNoiseDay) return { key: "railDay", type: "Bahn", period: "Tag", source: "BAFU / GeoAdmin", priority: 1 };
+  if (layer === LAYERS.railNoiseNight) return { key: "railNight", type: "Bahn", period: "Nacht", source: "BAFU / GeoAdmin", priority: 1 };
   return null;
+}
+
+function parseNoiseCandidate(result, geo, radiusMeters) {
+  const meta = noiseKeyForLayer(result?.layerBodId || result?.layerId);
+  if (!meta) return null;
+  const properties = result?.properties || result?.attributes || {};
+  const db = parseNoiseDb({ ...properties, __label: result?.layerName || "" });
+  if (db == null) return null;
+  const distanceMeters = distanceToNoiseFeatureMeters(result, geo, radiusMeters);
+  return {
+    ...meta,
+    db,
+    distanceMeters,
+    radiusMeters,
+    burden: noiseBurden(db, distanceMeters),
+    layer: result?.layerBodId || result?.layerId,
+  };
+}
+
+async function fetchNoiseBundle(geo) {
+  const layers = [
+    LAYERS.roadNoiseDay, LAYERS.roadNoiseNight,
+    LAYERS.railNoiseEffectiveDay, LAYERS.railNoiseEffectiveNight,
+    LAYERS.railNoiseDay, LAYERS.railNoiseNight,
+  ];
+  const found = {};
+  for (const radius of [25, 50, 100, 250]) {
+    let results = [];
+    try {
+      results = await identifyNoiseEnvelope(layers, geo, radius);
+    } catch {
+      continue;
+    }
+    const candidates = results.map((result) => parseNoiseCandidate(result, geo, radius)).filter(Boolean);
+    for (const key of ["roadDay", "roadNight", "railDay", "railNight"]) {
+      if (found[key]) continue;
+      const options = candidates.filter((candidate) => candidate.key === key);
+      if (!options.length) continue;
+      options.sort((a, b) => (b.priority - a.priority) || (b.burden - a.burden) || (a.distanceMeters - b.distanceMeters));
+      found[key] = options[0];
+    }
+    if (found.roadDay && found.roadNight && found.railDay && found.railNight) break;
+  }
+  const all = Object.values(found);
+  if (!all.length) return null;
+  const strongest = [...all].sort((a, b) => (b.burden - a.burden) || (b.db - a.db))[0];
+  const sources = [...new Set(all.map((item) => item.source))];
+  return {
+    ...found,
+    strongest,
+    burden: strongest?.burden ?? 0,
+    source: sources.join(" + "),
+  };
 }
 
 function findValue(properties, patterns) {
@@ -184,10 +303,18 @@ function parseTransitClass(properties) {
 }
 
 function parseNoiseDb(properties) {
-  const raw = findValue(properties, ["db", "lr_tag", "laerm", "lärm", "value", "wert"]);
-  const match = raw == null ? null : String(raw).replace(",", ".").match(/\d+(?:\.\d+)?/);
-  const value = match ? Number(match[0]) : NaN;
-  return Number.isFinite(value) && value >= 30 && value <= 100 ? value : null;
+  if (!properties) return null;
+  const values = [];
+  for (const [key, raw] of Object.entries(properties)) {
+    const normalized = key.toLowerCase();
+    if (!["db", "lr", "laerm", "lärm", "value", "wert", "label", "immission"].some((pattern) => normalized.includes(pattern))) continue;
+    const matches = String(raw ?? "").replace(/,/g, ".").match(/\d+(?:\.\d+)?/g) || [];
+    for (const token of matches) {
+      const value = Number(token);
+      if (Number.isFinite(value) && value >= 30 && value <= 100) values.push(value);
+    }
+  }
+  return values.length ? Math.max(...values) : null;
 }
 
 function parseMunicipality(properties, fallbackName) {
@@ -560,11 +687,9 @@ export default async function handler(req, res) {
     const municipalityBfs = gwr?.municipalityBfs || municipalityParsed.municipalityBfs;
     const transitClass = parseTransitClass(layerMap[LAYERS.transitClass]);
 
-    const [transitD, roadNoiseD, railNoiseBafuD, railNoiseEffectiveD, vacancyD, officialSchoolD, shoppingD, osmSchoolD, motorwayD] = await Promise.all([
+    const [transitD, noiseD, vacancyD, officialSchoolD, shoppingD, osmSchoolD, motorwayD] = await Promise.all([
       runDiagnostic("Nächster ÖV-Punkt", "OpenTransportData", () => fetchNearestTransit(geo)),
-      runDiagnostic("Strassenlärm", "BAFU / GeoAdmin", () => identifyNoiseAdaptive(LAYERS.roadNoise, geo).then(parseNoiseDb)),
-      runDiagnostic("Bahnlärm BAFU", "BAFU / GeoAdmin", () => identifyNoiseAdaptive(LAYERS.railNoise, geo).then(parseNoiseDb)),
-      runDiagnostic("Bahnlärm effektiv", "BAV / GeoAdmin", () => identifyNoiseAdaptive(LAYERS.railNoiseEffective, geo).then(parseNoiseDb)),
+      runDiagnostic("Lärm Strasse/Bahn Tag+Nacht", "BAFU / BAV via GeoAdmin", () => fetchNoiseBundle(geo)),
       runDiagnostic("Leerwohnungsziffer", "BFS / opendata.swiss", () => fetchVacancyRate(municipalityBfs, municipalityName)),
       runDiagnostic("Schule / Betreuung (offiziell)", "opendata.swiss", () => fetchOfficialEducationPoi(geo, municipalityName)),
       runDiagnostic("Einkauf", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, retailQuery, [
@@ -577,9 +702,15 @@ export default async function handler(req, res) {
     ]);
 
     const nearestPublicTransportMeters = transitD.value;
-    const roadNoiseDb = roadNoiseD.value;
-    const railNoiseDb = railNoiseEffectiveD.value ?? railNoiseBafuD.value;
+    const noise = noiseD.value;
+    const roadNoiseDayDb = noise?.roadDay?.db ?? null;
+    const roadNoiseNightDb = noise?.roadNight?.db ?? null;
+    const railNoiseDayDb = noise?.railDay?.db ?? null;
+    const railNoiseNightDb = noise?.railNight?.db ?? null;
+    const roadNoiseDb = Math.max(roadNoiseDayDb || 0, roadNoiseNightDb || 0) || null;
+    const railNoiseDb = Math.max(railNoiseDayDb || 0, railNoiseNightDb || 0) || null;
     const maxNoiseDb = Math.max(roadNoiseDb || 0, railNoiseDb || 0) || null;
+    const noiseBurdenPercent = noise?.burden ?? null;
     const vacancy = vacancyD.value;
     const schoolOsmResult = osmSchoolD.value;
     const schoolMeters = officialSchoolD.value ?? schoolOsmResult?.meters ?? null;
@@ -591,7 +722,7 @@ export default async function handler(req, res) {
       shoppingMinutes: walkingMinutes(shoppingMeters),
       schoolMinutes: walkingMinutes(schoolMeters),
       motorwayMinutes: drivingMinutes(motorwayMeters),
-      noiseLevel: maxNoiseDb == null ? null : Math.round(clamp((maxNoiseDb - 35) * 2.1)),
+      noiseLevel: noiseBurdenPercent,
       vacancyRisk: vacancy?.value == null ? null : Math.round(vacancyRiskScore(vacancy.value)),
     };
 
@@ -630,9 +761,7 @@ export default async function handler(req, res) {
       core.diagnostic,
       transitD.diagnostic,
       vacancyD.diagnostic,
-      roadNoiseD.diagnostic,
-      railNoiseBafuD.diagnostic,
-      railNoiseEffectiveD.diagnostic,
+      noiseD.diagnostic,
       officialSchoolD.diagnostic,
       shoppingD.diagnostic,
       osmSchoolD.diagnostic,
@@ -649,6 +778,15 @@ export default async function handler(req, res) {
         vacancyYear: vacancy?.year ?? null,
         roadNoiseDb,
         railNoiseDb,
+        roadNoiseDayDb,
+        roadNoiseNightDb,
+        railNoiseDayDb,
+        railNoiseNightDb,
+        roadNoiseDistanceMeters: noise?.roadDay?.distanceMeters ?? noise?.roadNight?.distanceMeters ?? null,
+        railNoiseDistanceMeters: noise?.railDay?.distanceMeters ?? noise?.railNight?.distanceMeters ?? null,
+        noiseImpactPercent: noiseBurdenPercent,
+        noiseStrongestType: noise?.strongest?.type ?? null,
+        noiseStrongestPeriod: noise?.strongest?.period ?? null,
         nearestPublicTransportMeters,
         nearestShoppingMeters: shoppingMeters,
         nearestSchoolMeters: schoolMeters,
@@ -663,7 +801,7 @@ export default async function handler(req, res) {
         educationSource: officialSchoolD.value != null ? "opendata.swiss" : schoolOsmResult?.source ?? null,
         shoppingSource: shoppingD.value?.source ?? null,
         motorwaySource: motorwayD.value?.source ?? null,
-        noiseSource: maxNoiseDb != null ? (railNoiseEffectiveD.value != null ? "BAV / GeoAdmin" : "BAFU / GeoAdmin") : null,
+        noiseSource: noise?.source ?? null,
         vacancySource: vacancy?.source ?? null,
       },
       market: {
@@ -679,7 +817,7 @@ export default async function handler(req, res) {
         { name: "swisstopo / GeoAdmin", detail: "Amtliche Adresse, Gemeinde und Gebäudeverknüpfung" },
         { name: "Bundesamt für Statistik BFS", detail: "GWR und Leerwohnungsziffer; Gemeinde wird über die BFS-Nummer zugeordnet" },
         { name: "Bundesamt für Raumentwicklung ARE", detail: "ÖV-Güteklasse" },
-        { name: "BAFU / BAV via GeoAdmin", detail: "Strassenlärm sowie effektive Eisenbahnlärm-Immissionen direkt am Objektstandort mit räumlichem Fallback" },
+        { name: "BAFU / BAV via GeoAdmin", detail: "Strassen- und Bahnlärm getrennt für Tag/Nacht; Suche am Objekt sowie 25/50/100/250 m. Der Einfluss nimmt mit der Distanz ab." },
         { name: "OpenTransportData / transport.opendata.ch", detail: "Nächster ÖV-Servicepunkt" },
         { name: "opendata.swiss", detail: "Offizielle kantonale/kommunale Schul-, Betreuungs- und Leerstandsdaten, sofern maschinenlesbar verfügbar" },
         { name: "OpenStreetMap", detail: "Einkauf, Schule/Betreuung und Autobahnanschlüsse über zwei unabhängige OSM-Zugriffswege (Photon und Overpass), mit gestaffelten Radien" },

@@ -80,6 +80,15 @@ export type OpenDataLocationReport = {
     vacancyYear: string | null;
     roadNoiseDb: number | null;
     railNoiseDb: number | null;
+    roadNoiseDayDb?: number | null;
+    roadNoiseNightDb?: number | null;
+    railNoiseDayDb?: number | null;
+    railNoiseNightDb?: number | null;
+    roadNoiseDistanceMeters?: number | null;
+    railNoiseDistanceMeters?: number | null;
+    noiseImpactPercent?: number | null;
+    noiseStrongestType?: string | null;
+    noiseStrongestPeriod?: string | null;
     nearestPublicTransportMeters: number | null;
     nearestShoppingMeters: number | null;
     nearestSchoolMeters: number | null;
