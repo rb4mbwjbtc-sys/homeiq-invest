@@ -760,3 +760,7 @@ img,svg,iframe{max-width:100%}
 .source-diagnostics span{font-size:10px;color:var(--muted)}
 .source-diagnostics .diag-loaded{color:#14765f}.source-diagnostics .diag-not_found{color:#8b6a28}.source-diagnostics .diag-timeout,.source-diagnostics .diag-error{color:#a6422f}
 @media(max-width:650px){.source-diagnostics{grid-template-columns:1fr}}
+
+
+/* HomeIQ V5.3 – robuste modulare Mikrolage */
+.micro-location-details{margin-top:16px;padding:16px;border:1px solid #cfe4dc;border-radius:14px;background:#f6fbf9}.micro-location-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}.micro-location-head>div{display:grid;gap:4px}.micro-location-head small{color:var(--muted);font-weight:700}.micro-location-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}.micro-location-grid>div{padding:11px;border:1px solid var(--line);border-radius:10px;background:#fff;min-width:0}.micro-location-grid span,.micro-location-grid small{display:block}.micro-location-grid span{font-size:11px;color:var(--muted)}.micro-location-grid strong{display:block;margin:4px 0;font-size:14px}.micro-location-grid small{font-size:10px;color:var(--muted);line-height:1.35}@media(max-width:900px){.micro-location-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.micro-location-head{align-items:flex-start;flex-direction:column}.micro-location-grid{grid-template-columns:1fr}}

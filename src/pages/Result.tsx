@@ -114,7 +114,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.2</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.3</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -233,6 +233,22 @@ export function Result() {
               </div>
             ))}
           </div>
+          {input.openDataLocation?.evidence.microLocationProfile && (() => {
+            const micro = input.openDataLocation.evidence.microLocationProfile;
+            const components = micro.components;
+            const fmt = (meters: number | null | undefined) => meters == null ? "kein Treffer bis 2 km" : `${Math.round(meters)} m`;
+            const rows = [
+              ["Grün & Natur", components.green.score, fmt(components.green.nearestMeters), components.green.available !== false],
+              ["Gewässer", components.water.score, components.water.active === false ? "kein Gewässer bis 2 km · Bonusfaktor" : fmt(components.water.nearestMeters), components.water.available !== false],
+              ["Freizeit & Familie", components.family.score, fmt(components.family.nearestMeters), components.family.available !== false],
+              ["Wohnumfeld", components.residential.score, components.residential.nearestIndustrialMeters != null ? `Industrie ${Math.round(components.residential.nearestIndustrialMeters)} m` : components.residential.nearestResidentialMeters != null ? `Wohngebiet ${Math.round(components.residential.nearestResidentialMeters)} m` : "Umfeld analysiert", components.residential.available !== false],
+              ["Lokale Urbanität", components.urbanity.score, fmt(components.urbanity.nearestMeters), components.urbanity.available !== false],
+            ] as const;
+            return <div className="micro-location-details">
+              <div className="micro-location-head"><div><span className="eyebrow">MIKROLAGE</span><strong>{micro.score}/100 · unmittelbares Wohnumfeld</strong></div><small>Datenabdeckung {micro.dataCoverage ?? 100}%</small></div>
+              <div className="micro-location-grid">{rows.map(([label, score, detail, available]) => <div key={label}><span>{label}</span><strong>{available && score != null ? `${score}/100` : "—"}</strong><small>{available ? detail : "Quelle technisch nicht verfügbar"}</small></div>)}</div>
+            </div>;
+          })()}
           {input.openDataLocation && (
             <div className="result-open-data">
               <div className="result-open-data-head">
@@ -299,7 +315,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.2</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.3</span></div>
             <h1>{input.title}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}

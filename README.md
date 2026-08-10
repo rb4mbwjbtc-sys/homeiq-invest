@@ -1,16 +1,14 @@
-# HomeIQ Independent V5.2 – OSM Micro-Location Environment
+# HomeIQ Independent V5.3 – Robust Modular Micro-Location
 
-V5.2 baut auf V5.1 auf. Alle bereits funktionierenden Standortquellen (Adresse/GWR, ÖV, Einkauf, Schule/Betreuung, Autobahn, Leerstand und Lärm) bleiben unverändert.
+V5.3 baut auf V5.2 auf. Alle bereits funktionierenden Standortquellen bleiben unverändert. Geändert wurde gezielt die Mikrolage.
 
-Neu in V5.2:
+Neu in V5.3:
+- fünf unabhängige Mikrolage-Module: Grün/Natur, Gewässer, Freizeit/Familie, Wohnumfeld, lokale Urbanität
+- ein technischer Ausfall eines Moduls verwirft nicht mehr die übrigen Teilergebnisse
+- OSM-Wege und -Flächen werden mit Geometrie ausgewertet; bei grossen Polygonen zählt der Abstand zur tatsächlichen Geometrie statt zum Mittelpunkt (wichtig z.B. für Seen, Parks und Wälder)
+- Gewässer bleiben Bonusfaktor: kein Gewässer bis 2 km verursacht keinen Malus
+- dynamische Gewichtung nur über tatsächlich aktive Mikrolage-Komponenten
+- separate Mikrolage-Datenabdeckung und transparente Teilwerte in der Ergebnisansicht
+- ÖV, Einkauf, Schule, Autobahn, Leerstand, GWR und Lärm bleiben technisch unverändert
 
-- Mikrolage wird nicht mehr aus ÖV, Einkauf, Schule, Lärm oder Leerstand abgeleitet.
-- Eine separate OpenStreetMap/Overpass-Umfeldanalyse betrachtet das unmittelbare Wohnumfeld bis 2 km.
-- Gewichtung Mikrolage: Grün & Natur 30 %, Gewässer 15 %, Freizeit & Familie 20 %, Wohnumfeld 25 %, lokale Urbanität/Dienstleistungen 10 %.
-- Grünflächen werden nicht nur nach dem nächsten Treffer, sondern zusätzlich nach Dichte innerhalb 500 m / 1 km bewertet.
-- Erfasst werden u. a. Parks, Wald/Natur, Seen/Flüsse/Bäche, Spielplätze, Sport-/Freizeitanlagen, Wohngebiet, Industrie/Gewerbe, Hauptverkehrsachsen sowie lokale Dienstleistungen.
-- Strassen-/Bahnlärm wird in der Mikrolage bewusst nicht nochmals bewertet, da dafür ein eigener Lärmfaktor existiert.
-- Die Ergebnisansicht zeigt statt "x/100 Qualität" eine transparente Kurzbeschreibung, z. B. "Grün/Natur 250 m · Gewässer 600 m · Freizeit 400 m · Wohngebiet im Umfeld".
-- Fehlen die Mikrolagedaten technisch, wird der Mikrolagefaktor nicht als gemessener Wert ausgegeben.
-
-Die öffentliche Photon-/Overpass-Infrastruktur bleibt ein Fallback-/Open-Data-Zugriff. Für hohe Produktionslast sollte später ein eigener oder vertraglich abgesicherter OSM-Dienst verwendet werden.
+Version: 5.3.0

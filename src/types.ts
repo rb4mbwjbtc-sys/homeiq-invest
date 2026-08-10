@@ -103,14 +103,16 @@ export type OpenDataLocationReport = {
     microLocationSummary?: string | null;
     microLocationProfile?: {
       score: number;
+      dataCoverage?: number;
       summary: string;
       components: {
-        green: { score: number; nearestMeters: number | null; count500m: number; count1000m: number };
-        water: { score: number; nearestMeters: number | null; count1000m: number };
-        family: { score: number; nearestMeters: number | null; count500m: number; count1000m: number };
-        residential: { score: number; nearestResidentialMeters: number | null; nearestIndustrialMeters: number | null; nearestMajorRoadMeters: number | null };
-        urbanity: { score: number; nearestMeters: number | null; count1000m: number };
+        green: { available?: boolean; score: number; nearestMeters: number | null; count500m: number; count1000m: number };
+        water: { available?: boolean; active?: boolean; score: number | null; nearestMeters: number | null; count1000m: number };
+        family: { available?: boolean; score: number; nearestMeters: number | null; count500m: number; count1000m: number };
+        residential: { available?: boolean; active?: boolean; score: number | null; nearestResidentialMeters: number | null; nearestIndustrialMeters: number | null; nearestCommercialMeters?: number | null; nearestMajorRoadMeters: number | null; nearestRailwayMeters?: number | null };
+        urbanity: { available?: boolean; score: number; nearestMeters: number | null; count1000m: number };
       };
+      moduleStatus?: Record<string, string>;
     } | null;
     searchRadiusKm?: number;
     categoryRadiusKm?: {
