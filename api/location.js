@@ -33,7 +33,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4500) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/4.3 (Swiss real-estate analysis; public/open data gateway)",
+        "User-Agent": "HomeIQ-Invest/4.4 (Swiss real-estate analysis; public/open data gateway)",
         ...(options.headers || {}),
       },
     });
@@ -53,7 +53,7 @@ async function fetchText(url, options = {}, timeoutMs = 4500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,*/*",
-        "User-Agent": "HomeIQ-Invest/4.3 (Swiss real-estate analysis; public/open data gateway)",
+        "User-Agent": "HomeIQ-Invest/4.4 (Swiss real-estate analysis; public/open data gateway)",
         ...(options.headers || {}),
       },
     });
@@ -186,36 +186,45 @@ function classifyPoi(tags = {}) {
   return null;
 }
 
-async function overpassSearch(geo, kind, radiusMeters, timeoutMs = 3300) {
-  const selector = kind === "shopping"
-    ? '(nwr(around:' + radiusMeters + ',' + geo.lat + ',' + geo.lon + ')[shop~"supermarket|convenience|grocery|department_store|mall|general"];nwr(around:' + radiusMeters + ',' + geo.lat + ',' + geo.lon + ')[amenity=marketplace];)'
-    : kind === "school"
-      ? '(nwr(around:' + radiusMeters + ',' + geo.lat + ',' + geo.lon + ')[amenity~"school|kindergarten|childcare"]; )'
-      : '(nwr(around:' + radiusMeters + ',' + geo.lat + ',' + geo.lon + ')[highway=motorway_junction];)';
-  const query = `[out:json][timeout:3];${selector}out center tags qt 80;`;
+async function overpassCombined(geo, radiusKm, timeoutMs = 4300) {
+  const poiRadius = Math.round(radiusKm * 1000);
+  const motorwayRadius = Math.round(Math.max(15, radiusKm) * 1000);
+  const query = `[out:json][timeout:4];(
+    nwr(around:${poiRadius},${geo.lat},${geo.lon})[shop~"supermarket|convenience|grocery|department_store|mall|general|bakery|butcher"];
+    nwr(around:${poiRadius},${geo.lat},${geo.lon})[amenity~"marketplace|school|kindergarten|childcare"];
+    nwr(around:${motorwayRadius},${geo.lat},${geo.lon})[highway=motorway_junction];
+  );out center tags qt 2500;`;
   const requests = OVERPASS_ENDPOINTS.map((endpoint) => fetchJson(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
     body: new URLSearchParams({ data: query }).toString(),
   }, timeoutMs));
-  try {
-    // Nicht die erste erfolgreiche Antwort blind übernehmen: einzelne öffentliche
-    // Overpass-Instanzen liefern unter Last gelegentlich leere Teilantworten.
-    // Wir werten deshalb alle rechtzeitig erfolgreichen Antworten aus und mergen Treffer.
-    const settled = await Promise.allSettled(requests);
-    const elements = settled.flatMap((entry) => entry.status === "fulfilled" ? (entry.value.elements || []) : []);
-    let nearest = Infinity;
-    for (const element of elements) {
-      const lat = Number(element.lat ?? element.center?.lat);
-      const lon = Number(element.lon ?? element.center?.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      if (classifyPoi(element.tags || {}) !== kind) continue;
-      nearest = Math.min(nearest, haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon }));
+
+  const settled = await Promise.allSettled(requests);
+  const unique = new Map();
+  for (const entry of settled) {
+    if (entry.status !== "fulfilled") continue;
+    for (const element of entry.value.elements || []) {
+      const key = `${element.type || ""}:${element.id || ""}`;
+      if (!unique.has(key)) unique.set(key, element);
     }
-    return Number.isFinite(nearest) ? Math.round(nearest) : null;
-  } catch {
-    return null;
   }
+
+  const nearest = { shopping: Infinity, school: Infinity, motorway: Infinity };
+  for (const element of unique.values()) {
+    const lat = Number(element.lat ?? element.center?.lat);
+    const lon = Number(element.lon ?? element.center?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const kind = classifyPoi(element.tags || {});
+    if (!kind) continue;
+    nearest[kind] = Math.min(nearest[kind], haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon }));
+  }
+
+  return {
+    shoppingMeters: Number.isFinite(nearest.shopping) ? Math.round(nearest.shopping) : null,
+    schoolMeters: Number.isFinite(nearest.school) ? Math.round(nearest.school) : null,
+    motorwayMeters: Number.isFinite(nearest.motorway) ? Math.round(nearest.motorway) : null,
+  };
 }
 
 function radiusBucket(meters, stepsKm) {
@@ -225,32 +234,48 @@ function radiusBucket(meters, stepsKm) {
 }
 
 async function fetchPois(geo) {
-  // Zwei Suchstufen statt vieler serieller Overpass-Abfragen: schnell im Nahbereich,
-  // danach nur für fehlende Kategorien ein grosser Fallback-Radius.
-  const configs = {
-    shopping: { near: 5, far: 20, steps: [1, 2.5, 5, 10, 15, 20] },
-    school: { near: 5, far: 20, steps: [1, 2.5, 5, 10, 15, 20] },
-    motorway: { near: 15, far: 50, steps: [5, 10, 15, 20, 35, 50] },
-  };
+  // V4.4: nur zwei kombinierte Overpass-Runden statt separater Requests pro Kategorie.
+  // Dadurch sinkt die Zahl externer Requests massiv und eine einzelne leere Instanz
+  // blockiert Einkauf/Schule/Autobahn nicht mehr.
+  const first = await overpassCombined(geo, 5, 4200);
+  const missing = ["shopping", "school", "motorway"].filter((kind) => first[`${kind}Meters`] == null);
+  let second = { shoppingMeters: null, schoolMeters: null, motorwayMeters: null };
+  if (missing.length) second = await overpassCombined(geo, 20, 4500);
 
-  const kinds = ["shopping", "school", "motorway"];
-  const nearResults = await Promise.all(kinds.map((kind) => overpassSearch(geo, kind, configs[kind].near * 1000)));
-  const results = Object.fromEntries(kinds.map((kind, index) => [kind, nearResults[index]]));
+  const shoppingMeters = first.shoppingMeters ?? second.shoppingMeters;
+  const schoolMeters = first.schoolMeters ?? second.schoolMeters;
+  let motorwayMeters = first.motorwayMeters ?? second.motorwayMeters;
 
-  const missingKinds = kinds.filter((kind) => results[kind] == null);
-  if (missingKinds.length) {
-    const farResults = await Promise.all(missingKinds.map((kind) => overpassSearch(geo, kind, configs[kind].far * 1000, 3900)));
-    missingKinds.forEach((kind, index) => { results[kind] = farResults[index]; });
+  // Autobahn darf weiter entfernt sein. Nur falls nach 20 km noch nichts vorliegt,
+  // folgt eine einzelne fokussierte 50-km-Abfrage.
+  if (motorwayMeters == null) {
+    const query = `[out:json][timeout:4];nwr(around:50000,${geo.lat},${geo.lon})[highway=motorway_junction];out center tags qt 500;`;
+    const settled = await Promise.allSettled(OVERPASS_ENDPOINTS.map((endpoint) => fetchJson(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: new URLSearchParams({ data: query }).toString(),
+    }, 4300)));
+    let nearest = Infinity;
+    for (const entry of settled) {
+      if (entry.status !== "fulfilled") continue;
+      for (const element of entry.value.elements || []) {
+        const lat = Number(element.lat ?? element.center?.lat);
+        const lon = Number(element.lon ?? element.center?.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        nearest = Math.min(nearest, haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon }));
+      }
+    }
+    motorwayMeters = Number.isFinite(nearest) ? Math.round(nearest) : null;
   }
 
   return {
-    shoppingMeters: results.shopping,
-    schoolMeters: results.school,
-    motorwayMeters: results.motorway,
+    shoppingMeters,
+    schoolMeters,
+    motorwayMeters,
     categoryRadiusKm: {
-      shopping: radiusBucket(results.shopping, configs.shopping.steps),
-      school: radiusBucket(results.school, configs.school.steps),
-      motorway: radiusBucket(results.motorway, configs.motorway.steps),
+      shopping: radiusBucket(shoppingMeters, [1, 2.5, 5, 10, 15, 20]),
+      school: radiusBucket(schoolMeters, [1, 2.5, 5, 10, 15, 20]),
+      motorway: radiusBucket(motorwayMeters, [5, 10, 15, 20, 35, 50]),
     },
   };
 }
@@ -299,154 +324,6 @@ function vacancyRiskScore(rate) {
   return clamp(85 + (rate - 3) * 5);
 }
 
-function inferKind(text) {
-  const value = text.toLowerCase();
-  if (/miet|rent/.test(value)) return "rent";
-  if (/immobilienpreis|verkaufspreis|transaktion|eigentumswohnung|einfamilienhaus/.test(value)) return "price";
-  return "other";
-}
-
-function displayName(value) {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object") return value.de || value.en || value.fr || Object.values(value)[0] || "";
-  return "";
-}
-
-async function discoverOpenData(city) {
-  const searches = [`mietpreise ${city}`, `immobilienpreise ${city}`, `verkaufspreise ${city}`];
-  const out = [];
-  await Promise.all(searches.map(async (q) => {
-    try {
-      const params = new URLSearchParams({ q, rows: "5" });
-      const payload = await fetchJson(`${OPENDATA_SEARCH}?${params}`, {}, 3500);
-      for (const pkg of payload.result?.results || []) {
-        const title = cleanLabel(displayName(pkg.title) || pkg.name || "Open-Data-Datensatz");
-        const publisher = cleanLabel(displayName(pkg.organization?.title) || pkg.organization?.display_name || "opendata.swiss");
-        const resource = (pkg.resources || []).find((r) => /csv|json/i.test(String(r.format || ""))) || (pkg.resources || [])[0];
-        const url = resource?.url || pkg.url || `https://opendata.swiss/de/dataset/${pkg.name}`;
-        if (!out.some((item) => item.url === url)) out.push({ title, publisher, url, kind: inferKind(`${title} ${pkg.notes || ""}`) });
-      }
-    } catch {
-      // Metadata discovery is optional and never blocks the location result.
-    }
-  }));
-  return out.slice(0, 8);
-}
-
-function parseCsv(text) {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
-  const delimiter = (lines[0].match(/;/g) || []).length >= (lines[0].match(/,/g) || []).length ? ";" : ",";
-  const split = (line) => line.split(delimiter).map((v) => v.replace(/^"|"$/g, "").trim());
-  const headers = split(lines[0]);
-  return lines.slice(1).map((line) => Object.fromEntries(split(line).map((value, i) => [headers[i] || `c${i}`, value])));
-}
-
-function numberFromRecord(record, keyPatterns, min, max) {
-  for (const [key, raw] of Object.entries(record)) {
-    const k = key.toLowerCase();
-    if (!keyPatterns.some((p) => k.includes(p))) continue;
-    const n = Number(String(raw).replace(/[^0-9,.-]/g, "").replace(/'/g, "").replace(",", "."));
-    if (Number.isFinite(n) && n >= min && n <= max) return n;
-  }
-  return null;
-}
-
-async function tryZurichRentBenchmark(city, rooms) {
-  if (!/^zürich$/i.test(city.trim())) return null;
-  try {
-    const search = await fetchJson(`${OPENDATA_SEARCH}?${new URLSearchParams({ q: "Mietpreise in der Stadt Zürich MPE", rows: "5" })}`, {}, 3500);
-    const pkg = (search.result?.results || []).find((p) => /mietpreise/i.test(displayName(p.title)));
-    const resource = (pkg?.resources || []).find((r) => /csv/i.test(String(r.format || "")));
-    if (!resource?.url) return null;
-    const rows = parseCsv(await fetchText(resource.url, {}, 4000));
-    if (!rows.length) return null;
-    const roomRounded = Math.max(1, Math.round(Number(rooms) || 3));
-    const candidates = rows.filter((row) => {
-      const blob = Object.values(row).join(" ").toLowerCase();
-      const roomMatch = blob.match(/(?:^|\D)([1-6])(?:\.?0)?\s*(?:zimmer|zi|z)?(?:\D|$)/i);
-      return !roomMatch || Number(roomMatch[1]) === roomRounded;
-    });
-    let best = null;
-    for (const row of candidates.length ? candidates : rows) {
-      const n = numberFromRecord(row, ["median", "m2", "m²", "qm", "quadratmeter"], 5, 100);
-      if (n != null) { best = n; break; }
-    }
-    if (best == null) return null;
-    return { value: best, source: "Open Data Zürich – Mietpreiserhebung", confidence: "hoch" };
-  } catch {
-    return null;
-  }
-}
-
-async function tryZurichPriceBenchmark(city, propertyType) {
-  if (!/^zürich$/i.test(city.trim()) && !/zh/i.test(city)) return null;
-  try {
-    const search = await fetchJson(`${OPENDATA_SEARCH}?${new URLSearchParams({ q: "Immobilienpreise im Kanton Zürich", rows: "5" })}`, {}, 3500);
-    const pkg = (search.result?.results || []).find((p) => /immobilienpreise/i.test(displayName(p.title)));
-    if (!pkg) return null;
-    const wanted = propertyType === "wohnung" ? /eigentumswohnung.*gemeinde/i : /einfamilienhaus.*gemeinde/i;
-    const resource = (pkg.resources || []).find((r) => /json/i.test(String(r.format || "")) && wanted.test(`${r.name || ""} ${r.description || ""}`));
-    if (!resource?.url) return null;
-    const payload = await fetchJson(resource.url, {}, 4000);
-    const records = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.results) ? payload.results : [];
-    const cityRows = records.filter((row) => Object.values(row || {}).some((v) => String(v).toLowerCase().includes(city.toLowerCase())));
-    let best = null;
-    for (const row of cityRows.length ? cityRows : records) {
-      const n = numberFromRecord(row, ["m2", "m²", "qm", "quadratmeter", "preis_m"], 1000, 40000);
-      if (n != null) { best = n; break; }
-    }
-    if (best == null) return null;
-    return { value: best, source: "Kanton Zürich – offene Transaktionsdaten", confidence: "hoch" };
-  } catch {
-    return null;
-  }
-}
-
-async function fetchMarketLayers(city, propertyType, rooms) {
-  const [discovered, rent, price] = await Promise.all([
-    discoverOpenData(city),
-    tryZurichRentBenchmark(city, rooms),
-    tryZurichPriceBenchmark(city, propertyType),
-  ]);
-
-  const tiers = [
-    {
-      tier: 1,
-      name: "Bundesdaten / schweizweite Open Data",
-      status: "verwendet",
-      detail: "GeoAdmin, GWR, BFS, ARE, BAFU und OpenTransportData bilden das stabile Grundgerüst.",
-    },
-    {
-      tier: 2,
-      name: "Kantonale und kommunale Open Data",
-      status: discovered.length ? "gefunden" : "nicht_verfuegbar",
-      detail: discovered.length ? `${discovered.length} potenziell passende offene Marktdatensätze im Katalog gefunden.` : "Für diesen Ort wurde aktuell kein direkt passender lokaler Marktdatensatz gefunden.",
-    },
-    {
-      tier: 3,
-      name: "Kommerzielle Marktdaten",
-      status: "vorbereitet",
-      detail: "Adapter für Raiffeisen Gemeindeinfo, ImmoScout24/SMG und Comparis sind architektonisch vorgesehen, bleiben ohne offiziellen API-/Lizenzzugang deaktiviert.",
-    },
-  ];
-
-  const confidence = price?.value && rent?.value ? "hoch" : price?.value || rent?.value ? "mittel" : "eingeschränkt";
-  return {
-    pricePerSqm: price?.value ?? null,
-    rentPerSqm: rent?.value ?? null,
-    priceSource: price?.source ?? null,
-    rentSource: rent?.source ?? null,
-    confidence,
-    radiusKm: null,
-    discoveredDatasets: discovered,
-    tiers,
-    note: price?.value || rent?.value
-      ? "Mindestens ein belastbarer öffentlicher Marktbenchmark wurde automatisch übernommen. Fehlende Werte werden nicht erfunden."
-      : "Es wurden keine automatisch auslesbaren lokalen Marktbenchmarks gefunden. HomeIQ zeigt deshalb keinen erfundenen Marktwert bzw. keine erfundene Marktmiete. Ebene 3 bleibt bis zu einem offiziellen Datenzugang deaktiviert.",
-  };
-}
-
 export default async function handler(req, res) {
   if (req.method !== "GET") return json(res, 405, { error: "Method not allowed" });
   const street = String(req.query.street || "").trim();
@@ -462,7 +339,7 @@ export default async function handler(req, res) {
 
   try {
     const geo = await geocodeAddress(street, postalCode, city);
-    const [gwrR, municipalityR, transitClassR, roadNoiseR, railNoiseR, transitR, poisR, marketR, vacancyR] = await Promise.allSettled([
+    const [gwrR, municipalityR, transitClassR, roadNoiseR, railNoiseR, transitR, poisR, vacancyR] = await Promise.allSettled([
       fetchGwr(geo),
       identifyLayer("ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill", geo, 6),
       identifyLayer("ch.are.gueteklassen_oev", geo, 8),
@@ -470,7 +347,6 @@ export default async function handler(req, res) {
       identifyLayer("ch.bafu.laerm-bahnlaerm_tag", geo, 10),
       fetchNearestTransit(geo),
       fetchPois(geo),
-      fetchMarketLayers(city, propertyType, rooms),
       fetchVacancyRate(null, city),
     ]);
 
@@ -489,10 +365,10 @@ export default async function handler(req, res) {
     const maxNoiseDb = Math.max(roadNoiseDb || 0, railNoiseDb || 0) || null;
     const nearestPublicTransportMeters = unwrap(transitR);
     const pois = unwrap(poisR, { shoppingMeters: null, schoolMeters: null, motorwayMeters: null, categoryRadiusKm: { shopping: null, school: null, motorway: null } });
-    const market = unwrap(marketR, {
+    const market = {
       pricePerSqm: null, rentPerSqm: null, priceSource: null, rentSource: null, confidence: "eingeschränkt", radiusKm: null,
-      discoveredDatasets: [], tiers: [], note: "Marktdaten konnten nicht geladen werden.",
-    });
+      discoveredDatasets: [], tiers: [], note: "Marktdaten werden von der separaten Markt-Pipeline geladen.",
+    };
 
     const actual = {
       publicTransportMinutes: walkingMinutes(nearestPublicTransportMeters),
@@ -566,7 +442,7 @@ export default async function handler(req, res) {
         { name: "Bundesamt für Raumentwicklung ARE", detail: "ÖV-Güteklasse" },
         { name: "Bundesamt für Umwelt BAFU", detail: "Strassen- und Bahnlärm" },
         { name: "OpenTransportData / transport.opendata.ch", detail: "Nächster ÖV-Servicepunkt" },
-        { name: "OpenStreetMap", detail: "Einkauf, Schulen/Betreuung und Autobahnanschlüsse; nicht blockierend" },
+        { name: "OpenStreetMap", detail: "Einkauf, Schulen/Betreuung und Autobahnanschlüsse; kombinierte Fallback-Abfrage" },
         { name: "opendata.swiss", detail: "Automatische Suche nach kantonalen und kommunalen Markt- und Mietdatensätzen" },
       ],
     };
