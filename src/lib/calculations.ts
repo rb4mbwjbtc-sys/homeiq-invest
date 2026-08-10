@@ -90,7 +90,8 @@ export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
   );
 
   const rating = score >= 80 ? "Sehr gute Investitionsmöglichkeit" : score >= 65 ? "Gute Investitionsmöglichkeit" : score >= 50 ? "Investment genauer prüfen" : "Kritische Investitionsmöglichkeit";
-  const recommendation = score >= 75 && netYield >= 3.4 && marketAnalysis.priceDifferencePercent > -8
+  const marketPriceOkay = !marketAnalysis.marketValueAvailable || marketAnalysis.priceDifferencePercent > -8;
+  const recommendation = score >= 75 && netYield >= 3.4 && marketPriceOkay
     ? "Kauf empfehlenswert"
     : score >= 55 ? "Kauf interessant nach Preisverhandlung" : "Kauf aktuell nicht empfohlen";
 
@@ -105,9 +106,9 @@ export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
   else if (monthlyCashflow < 0) negatives.push("Negativer monatlicher Cashflow");
   if (locationAnalysis.score >= 75) positives.push(locationAnalysis.rating);
   else if (locationAnalysis.score < 50) negatives.push(locationAnalysis.rating);
-  if (marketAnalysis.priceDifferencePercent >= 8) positives.push("Kaufpreis unter geschätztem Marktwert");
-  else if (marketAnalysis.priceDifferencePercent <= -8) negatives.push("Kaufpreis über geschätztem Marktwert");
-  if (marketAnalysis.rentDifferencePercent >= 6) positives.push("Erkennbares Marktmietpotenzial");
+  if (marketAnalysis.marketValueAvailable && marketAnalysis.priceDifferencePercent >= 8) positives.push("Kaufpreis unter geschätztem Marktwert");
+  else if (marketAnalysis.marketValueAvailable && marketAnalysis.priceDifferencePercent <= -8) negatives.push("Kaufpreis über geschätztem Marktwert");
+  if (marketAnalysis.marketRentAvailable && marketAnalysis.rentDifferencePercent >= 6) positives.push("Erkennbares Marktmietpotenzial");
   if (ltv > 80) negatives.push("Hohe Belehnung");
   if (scoreBreakdown.objectQuality < 50) negatives.push("Erhöhter Sanierungs- oder Unterhaltsbedarf möglich");
   if (scoreBreakdown.marketability < 50) negatives.push("Eingeschränkte Vermietbarkeit oder Marktnachfrage");

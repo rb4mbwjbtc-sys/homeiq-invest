@@ -153,6 +153,8 @@ export type UnitMarketRentResult = RentalUnit & {
 };
 
 export type MarketAnalysis = {
+  marketValueAvailable: boolean;
+  marketRentAvailable: boolean;
   benchmarkPricePerSqm: number;
   adjustedPricePerSqm: number;
   estimatedMarketValue: number;

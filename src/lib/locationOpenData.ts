@@ -17,7 +17,7 @@ export async function loadSwissOpenDataLocation(
   });
 
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 12000);
+  const timer = window.setTimeout(() => controller.abort(), 22000);
   try {
     const response = await fetch(`/api/location?${params.toString()}`, {
       headers: { Accept: "application/json" },

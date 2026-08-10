@@ -32,7 +32,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4500) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/4.0 (Swiss real-estate analysis; public/open data gateway)",
+        "User-Agent": "HomeIQ-Invest/4.1 (Swiss real-estate analysis; public/open data gateway)",
         ...(options.headers || {}),
       },
     });
@@ -52,7 +52,7 @@ async function fetchText(url, options = {}, timeoutMs = 4500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,*/*",
-        "User-Agent": "HomeIQ-Invest/4.0 (Swiss real-estate analysis; public/open data gateway)",
+        "User-Agent": "HomeIQ-Invest/4.1 (Swiss real-estate analysis; public/open data gateway)",
         ...(options.headers || {}),
       },
     });
@@ -185,39 +185,60 @@ function classifyPoi(tags = {}) {
   return null;
 }
 
-async function fetchPois(geo) {
-  const query = `[out:json][timeout:4];(
-    nwr(around:10000,${geo.lat},${geo.lon})[shop~"supermarket|convenience|grocery|department_store|mall"];
-    nwr(around:10000,${geo.lat},${geo.lon})[amenity~"school|kindergarten|childcare|college"];
-    nwr(around:10000,${geo.lat},${geo.lon})[highway=motorway_junction];
-  );out center tags;`;
-  const requests = OVERPASS_ENDPOINTS.map(async (endpoint) => {
-    const payload = await fetchJson(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-      body: new URLSearchParams({ data: query }).toString(),
-    }, 4500);
-    return payload;
-  });
+async function overpassAtRadius(geo, kind, radiusMeters) {
+  const selector = kind === "shopping"
+    ? '[shop~"supermarket|convenience|grocery|department_store|mall"]'
+    : kind === "school"
+      ? '[amenity~"school|kindergarten|childcare|college"]'
+      : '[highway=motorway_junction]';
+  const query = `[out:json][timeout:3];(nwr(around:${radiusMeters},${geo.lat},${geo.lon})${selector};);out center tags 120;`;
+  const requests = OVERPASS_ENDPOINTS.map((endpoint) => fetchJson(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body: new URLSearchParams({ data: query }).toString(),
+  }, 3600));
   try {
     const payload = await Promise.any(requests);
-    const nearest = { shopping: Infinity, school: Infinity, motorway: Infinity };
+    let nearest = Infinity;
     for (const element of payload.elements || []) {
       const lat = Number(element.lat ?? element.center?.lat);
       const lon = Number(element.lon ?? element.center?.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      const kind = classifyPoi(element.tags || {});
-      if (!kind) continue;
-      nearest[kind] = Math.min(nearest[kind], haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon }));
+      if (classifyPoi(element.tags || {}) !== kind) continue;
+      nearest = Math.min(nearest, haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon }));
     }
-    return {
-      shoppingMeters: Number.isFinite(nearest.shopping) ? Math.round(nearest.shopping) : null,
-      schoolMeters: Number.isFinite(nearest.school) ? Math.round(nearest.school) : null,
-      motorwayMeters: Number.isFinite(nearest.motorway) ? Math.round(nearest.motorway) : null,
-    };
+    return Number.isFinite(nearest) ? Math.round(nearest) : null;
   } catch {
-    return { shoppingMeters: null, schoolMeters: null, motorwayMeters: null };
+    return null;
   }
+}
+
+async function adaptivePoiSearch(geo, kind, radiusStepsKm) {
+  for (const radiusKm of radiusStepsKm) {
+    const meters = await overpassAtRadius(geo, kind, radiusKm * 1000);
+    if (meters != null) return { meters, radiusKm };
+  }
+  return { meters: null, radiusKm: null };
+}
+
+async function fetchPois(geo) {
+  // POIs use larger radii than market interpolation: everyday services up to 20 km,
+  // motorway junctions up to 50 km. Searches stop as soon as a usable result exists.
+  const [shopping, school, motorway] = await Promise.all([
+    adaptivePoiSearch(geo, "shopping", [1, 2.5, 5, 10, 15, 20]),
+    adaptivePoiSearch(geo, "school", [1, 2.5, 5, 10, 15, 20]),
+    adaptivePoiSearch(geo, "motorway", [5, 10, 20, 35, 50]),
+  ]);
+  return {
+    shoppingMeters: shopping.meters,
+    schoolMeters: school.meters,
+    motorwayMeters: motorway.meters,
+    categoryRadiusKm: {
+      shopping: shopping.radiusKm,
+      school: school.radiusKm,
+      motorway: motorway.radiusKm,
+    },
+  };
 }
 
 async function fetchVacancyRate(municipalityBfs, municipalityName) {
@@ -451,7 +472,7 @@ export default async function handler(req, res) {
     const railNoiseDb = parseNoiseDb(unwrap(railNoiseR));
     const maxNoiseDb = Math.max(roadNoiseDb || 0, railNoiseDb || 0) || null;
     const nearestPublicTransportMeters = unwrap(transitR);
-    const pois = unwrap(poisR, { shoppingMeters: null, schoolMeters: null, motorwayMeters: null });
+    const pois = unwrap(poisR, { shoppingMeters: null, schoolMeters: null, motorwayMeters: null, categoryRadiusKm: { shopping: null, school: null, motorway: null } });
     const market = unwrap(marketR, {
       pricePerSqm: null, rentPerSqm: null, priceSource: null, rentSource: null, confidence: "eingeschränkt", radiusKm: null,
       discoveredDatasets: [], tiers: [], note: "Marktdaten konnten nicht geladen werden.",
@@ -495,7 +516,9 @@ export default async function handler(req, res) {
     if (pois.shoppingMeters == null) missing.push("Einkauf");
     if (pois.schoolMeters == null) missing.push("Schule/Betreuung");
     if (pois.motorwayMeters == null) missing.push("Autobahnanschluss");
-    const foundCount = 6 - missing.length;
+    if (market.pricePerSqm == null) missing.push("Marktpreis-Benchmark");
+    if (market.rentPerSqm == null) missing.push("Marktmiet-Benchmark");
+    const foundCount = 8 - missing.length;
 
     const body = {
       address: { formatted: geo.formattedAddress, lat: geo.lat, lon: geo.lon, easting: geo.easting, northing: geo.northing },
@@ -511,16 +534,16 @@ export default async function handler(req, res) {
         nearestShoppingMeters: pois.shoppingMeters,
         nearestSchoolMeters: pois.schoolMeters,
         nearestMotorwayJunctionMeters: pois.motorwayMeters,
-        searchRadiusKm: 10,
+        searchRadiusKm: Math.max(10, pois.categoryRadiusKm?.shopping || 0, pois.categoryRadiusKm?.school || 0, pois.categoryRadiusKm?.motorway || 0),
         categoryRadiusKm: {
-          transit: nearestPublicTransportMeters == null ? null : Math.min(10, Math.max(1, Math.ceil(nearestPublicTransportMeters / 1000))),
-          shopping: pois.shoppingMeters == null ? null : Math.min(10, Math.max(1, Math.ceil(pois.shoppingMeters / 1000))),
-          school: pois.schoolMeters == null ? null : Math.min(10, Math.max(1, Math.ceil(pois.schoolMeters / 1000))),
-          motorway: pois.motorwayMeters == null ? null : Math.min(10, Math.max(1, Math.ceil(pois.motorwayMeters / 1000))),
+          transit: nearestPublicTransportMeters == null ? null : Math.max(1, Math.ceil(nearestPublicTransportMeters / 1000)),
+          shopping: pois.categoryRadiusKm?.shopping ?? null,
+          school: pois.categoryRadiusKm?.school ?? null,
+          motorway: pois.categoryRadiusKm?.motorway ?? null,
         },
       },
       market,
-      quality: foundCount >= 5 ? "hoch" : foundCount >= 3 ? "mittel" : "eingeschränkt",
+      quality: foundCount >= 7 ? "hoch" : foundCount >= 4 ? "mittel" : "eingeschränkt",
       missing,
       loadedAt: new Date().toISOString(),
       sources: [

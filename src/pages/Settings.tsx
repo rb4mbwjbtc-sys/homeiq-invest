@@ -10,7 +10,7 @@ export function Settings() {
         <div><span>Sprache</span><strong>Deutsch (Schweiz)</strong></div>
         <div><span>Währung</span><strong>CHF</strong></div>
         <div><span>Datenregion</span><strong>Schweiz</strong></div>
-        <div><span>Version</span><strong>Independent v2.5 · Score & Google Maps</strong></div>
+        <div><span>Version</span><strong>Independent V4.1 · Robust Data & Clean UX</strong></div>
       </section>
     </div>
   );

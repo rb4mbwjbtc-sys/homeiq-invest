@@ -196,9 +196,9 @@ export function NewAnalysis() {
       setForm((previous) => ({
         ...previous,
         location: report.metrics,
-        marketDataRadiusKm: Math.min(10, Math.max(previous.marketDataRadiusKm, report.evidence.searchRadiusKm || 1)),
-        regionalMarketPricePerSqm: report.market.pricePerSqm ?? previous.regionalMarketPricePerSqm,
-        regionalMarketRentPerSqm: report.market.rentPerSqm ?? previous.regionalMarketRentPerSqm,
+        marketDataRadiusKm: Math.min(10, Math.max(1, report.market.radiusKm ?? previous.marketDataRadiusKm ?? 5)),
+        regionalMarketPricePerSqm: report.market.pricePerSqm ?? 0,
+        regionalMarketRentPerSqm: report.market.rentPerSqm ?? 0,
         openDataLocation: {
           address: report.address,
           building: report.building,
@@ -280,7 +280,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V4.0</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V4.1</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit Lageanalyse, Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -640,187 +640,57 @@ export function NewAnalysis() {
             <div className="empty-data compact-empty">
               <MapPin size={28} />
               <h3>Noch keine Standortdaten geladen</h3>
-              <p>Die Werte werden nicht simuliert. Sie erscheinen erst, nachdem die amtlichen und offenen Daten erfolgreich geladen wurden.</p>
+              <p>HomeIQ lädt die verfügbaren Lage- und Marktdaten automatisch. Nicht verfügbare Werte werden nicht geschätzt oder manuell ersetzt.</p>
             </div>
-          ) : (
-            <>
-              {form.openDataLocation && (
-                <section className="open-data-report">
-                  <div className="open-data-report-head">
-                    <div>
-                      <span className="eyebrow">SCHWEIZER OPEN DATA</span>
-                      <h3>{form.openDataLocation.address.formatted}</h3>
-                      <p>Automatisch ausgewertet aus offiziellen Bundesdaten und OpenStreetMap-Distanzen.</p>
-                    </div>
-                    <span className={`data-quality quality-${form.openDataLocation.quality}`}>Datenqualität: {form.openDataLocation.quality}</span>
-                  </div>
-                  <div className="open-data-evidence-grid">
-                    <div><span>ÖV-Güteklasse</span><strong>{form.openDataLocation.evidence.transitClass || "nicht verfügbar"}</strong></div>
-                    <div><span>Leerwohnungsziffer</span><strong>{form.openDataLocation.evidence.vacancyRate !== null ? `${form.openDataLocation.evidence.vacancyRate.toFixed(2)} %` : "nicht verfügbar"}</strong></div>
-                    <div><span>Nächster ÖV-Punkt</span><strong>{form.openDataLocation.evidence.nearestPublicTransportMeters !== null ? `${form.openDataLocation.evidence.nearestPublicTransportMeters} m · Radius ${form.openDataLocation.evidence.categoryRadiusKm?.transit || 1} km` : "nicht verfügbar"}</strong></div>
-                    <div><span>Einkauf</span><strong>{form.openDataLocation.evidence.nearestShoppingMeters !== null ? `${form.openDataLocation.evidence.nearestShoppingMeters} m · Radius ${form.openDataLocation.evidence.categoryRadiusKm?.shopping || 1} km` : "nicht verfügbar"}</strong></div>
-                    <div><span>Schule / Betreuung</span><strong>{form.openDataLocation.evidence.nearestSchoolMeters !== null ? `${form.openDataLocation.evidence.nearestSchoolMeters} m · Radius ${form.openDataLocation.evidence.categoryRadiusKm?.school || 1} km` : "nicht verfügbar"}</strong></div>
-                    <div><span>Autobahnanschluss</span><strong>{form.openDataLocation.evidence.nearestMotorwayJunctionMeters !== null ? `${form.openDataLocation.evidence.nearestMotorwayJunctionMeters} m · Radius ${form.openDataLocation.evidence.categoryRadiusKm?.motorway || 1} km` : "nicht verfügbar"}</strong></div>
-                    <div><span>Strassen-/Bahnlärm</span><strong>{Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0) || "nicht verfügbar"}{Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0) ? " dB" : ""}</strong></div>
-                    {form.openDataLocation.building?.egid && <div><span>EGID</span><strong>{form.openDataLocation.building.egid}</strong></div>}
-                    {form.openDataLocation.building?.constructionYear && <div><span>GWR-Baujahr</span><strong>{form.openDataLocation.building.constructionYear}</strong></div>}
-                  </div>
-                  <div className="open-data-market-summary">
-                    <div>
-                      <span>Marktpreis-Benchmark</span>
-                      <strong>{form.openDataLocation.market?.pricePerSqm != null ? `CHF ${form.openDataLocation.market?.pricePerSqm.toLocaleString("de-CH")} / m²` : "nicht verfügbar"}</strong>
-                      <small>{form.openDataLocation.market?.priceSource || "Kein belastbarer öffentlicher lokaler Preisbenchmark gefunden"}</small>
-                    </div>
-                    <div>
-                      <span>Marktmiet-Benchmark</span>
-                      <strong>{form.openDataLocation.market?.rentPerSqm != null ? `CHF ${form.openDataLocation.market?.rentPerSqm.toFixed(2)} / m² / Monat` : "nicht verfügbar"}</strong>
-                      <small>{form.openDataLocation.market?.rentSource || "Kein belastbarer öffentlicher lokaler Mietbenchmark gefunden"}</small>
-                    </div>
-                  </div>
-                  <details className="open-data-sources data-tier-details">
-                    <summary>HomeIQ Datenebenen 1–3</summary>
-                    {(form.openDataLocation.market?.tiers || []).map((tier) => (
-                      <div key={`${tier.tier}-${tier.name}`}>
-                        <strong>Ebene {tier.tier}: {tier.name}</strong>
-                        <span>{tier.detail}</span>
-                      </div>
-                    ))}
-                    {(form.openDataLocation.market?.discoveredDatasets?.length || 0) > 0 && (
-                      <div>
-                        <strong>Gefundene lokale Open-Data-Datensätze</strong>
-                        <span>{(form.openDataLocation.market?.discoveredDatasets || []).map((dataset) => dataset.title).join(" · ")}</span>
-                      </div>
-                    )}
-                    <small>{form.openDataLocation.market?.note}</small>
-                  </details>
-                  <p className="open-data-radius">Automatische Umkreissuche: bis {form.openDataLocation.evidence.searchRadiusKm || 10} km. Fehlende Teilwerte werden transparent ausgewiesen und nicht erfunden.</p>
-                  {form.openDataLocation.missing.length > 0 && (
-                    <p className="open-data-missing">Nicht verfügbare Teilwerte: {form.openDataLocation.missing.join(", ")}. Für diese Faktoren werden keine erfundenen Distanzen angezeigt; im Score werden sie neutral gewichtet.</p>
-                  )}
-                  <details className="open-data-sources">
-                    <summary>Datenquellen und Datenstand</summary>
-                    {form.openDataLocation.sources.map((source) => <div key={source.name}><strong>{source.name}</strong><span>{source.detail}</span></div>)}
-                    <small>Geladen am {new Date(form.openDataLocation.loadedAt).toLocaleString("de-CH")}</small>
-                  </details>
-                </section>
-              )}
-              <div className="form-grid">
-              <label>
-                ÖV zu Fuss (Min.)
-                <input
-                  type="number"
-                  placeholder="nicht verfügbar"
-                  value={form.openDataLocation?.evidence.nearestPublicTransportMeters !== null ? form.location.publicTransportMinutes : ""}
-                  onChange={(event) =>
-                    setLocation("publicTransportMinutes", Number(event.target.value))
-                  }
-                />
-              </label>
-              <label>
-                Einkauf (Min.)
-                <input
-                  type="number"
-                  placeholder="nicht verfügbar"
-                  value={form.openDataLocation?.evidence.nearestShoppingMeters !== null ? form.location.shoppingMinutes : ""}
-                  onChange={(event) => setLocation("shoppingMinutes", Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Schule / Betreuung (Min.)
-                <input
-                  type="number"
-                  placeholder="nicht verfügbar"
-                  value={form.openDataLocation?.evidence.nearestSchoolMeters !== null ? form.location.schoolMinutes : ""}
-                  onChange={(event) => setLocation("schoolMinutes", Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Autobahnanschluss (Min.)
-                <input
-                  type="number"
-                  placeholder="nicht verfügbar"
-                  value={form.openDataLocation?.evidence.nearestMotorwayJunctionMeters !== null ? form.location.motorwayMinutes : ""}
-                  onChange={(event) => setLocation("motorwayMinutes", Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Lärmbelastung (0–100)
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={form.location.noiseLevel}
-                  onChange={(event) => setLocation("noiseLevel", Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Nachfrage Gemeinde (0–100)
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={form.location.municipalityDemand}
-                  onChange={(event) =>
-                    setLocation("municipalityDemand", Number(event.target.value))
-                  }
-                />
-              </label>
-              <label>
-                Leerstandsrisiko (0–100)
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={form.location.vacancyRisk}
-                  onChange={(event) => setLocation("vacancyRisk", Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Mikrolage (0–100)
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={form.location.microLocation}
-                  onChange={(event) => setLocation("microLocation", Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Regionaler Marktpreis (CHF/m²)
-                <input
-                  type="number"
-                  value={form.regionalMarketPricePerSqm}
-                  onChange={(event) =>
-                    set("regionalMarketPricePerSqm", Number(event.target.value))
-                  }
-                />
-              </label>
-              <label>
-                Regionale Marktmiete (CHF/m²/Monat)
-                <input
-                  type="number"
-                  step="0.5"
-                  value={form.regionalMarketRentPerSqm}
-                  onChange={(event) =>
-                    set("regionalMarketRentPerSqm", Number(event.target.value))
-                  }
-                />
-              </label>
-              <label>
-                Datenradius (km, max. 10)
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={form.marketDataRadiusKm}
-                  onChange={(event) =>
-                    set("marketDataRadiusKm", Math.min(10, Number(event.target.value)))
-                  }
-                />
-              </label>
+          ) : form.openDataLocation ? (
+            <section className="open-data-report clean-location-report">
+              <div className="open-data-report-head">
+                <div>
+                  <span className="eyebrow">AUTOMATISCHE DATENANALYSE</span>
+                  <h3>{form.openDataLocation.address.formatted}</h3>
+                  <p>{8 - form.openDataLocation.missing.length} von 8 Lage-/Marktbausteinen verfügbar.</p>
+                </div>
+                <span className={`data-quality quality-${form.openDataLocation.quality}`}>Datenqualität: {form.openDataLocation.quality}</span>
               </div>
-            </>
-          )}
+
+              <div className="open-data-evidence-grid compact-evidence-grid">
+                <div><span>ÖV-Güteklasse</span><strong>{form.openDataLocation.evidence.transitClass || "nicht verfügbar"}</strong></div>
+                <div><span>Nächster ÖV-Punkt</span><strong>{form.openDataLocation.evidence.nearestPublicTransportMeters !== null ? `${form.openDataLocation.evidence.nearestPublicTransportMeters} m` : "nicht verfügbar"}</strong></div>
+                <div><span>Einkauf</span><strong>{form.openDataLocation.evidence.nearestShoppingMeters !== null ? `${form.openDataLocation.evidence.nearestShoppingMeters} m` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.categoryRadiusKm?.shopping ? `gefunden bis ${form.openDataLocation.evidence.categoryRadiusKm.shopping} km` : ""}</small></div>
+                <div><span>Schule / Betreuung</span><strong>{form.openDataLocation.evidence.nearestSchoolMeters !== null ? `${form.openDataLocation.evidence.nearestSchoolMeters} m` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.categoryRadiusKm?.school ? `gefunden bis ${form.openDataLocation.evidence.categoryRadiusKm.school} km` : ""}</small></div>
+                <div><span>Autobahnanschluss</span><strong>{form.openDataLocation.evidence.nearestMotorwayJunctionMeters !== null ? `${form.openDataLocation.evidence.nearestMotorwayJunctionMeters} m` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.categoryRadiusKm?.motorway ? `gefunden bis ${form.openDataLocation.evidence.categoryRadiusKm.motorway} km` : ""}</small></div>
+                <div><span>Leerwohnungsziffer</span><strong>{form.openDataLocation.evidence.vacancyRate !== null ? `${form.openDataLocation.evidence.vacancyRate.toFixed(2)} %` : "nicht verfügbar"}</strong></div>
+                <div><span>Lärm</span><strong>{Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0) ? `${Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0)} dB` : "nicht verfügbar"}</strong></div>
+                <div><span>Gebäude</span><strong>{form.openDataLocation.building?.constructionYear ? `Baujahr ${form.openDataLocation.building.constructionYear}` : form.openDataLocation.building?.egid ? `EGID ${form.openDataLocation.building.egid}` : "nicht verfügbar"}</strong></div>
+              </div>
+
+              <div className="open-data-market-summary clean-market-summary">
+                <div className={form.openDataLocation.market?.pricePerSqm ? "available" : "unavailable"}>
+                  <span>Marktpreis-Benchmark</span>
+                  <strong>{form.openDataLocation.market?.pricePerSqm != null ? `CHF ${form.openDataLocation.market.pricePerSqm.toLocaleString("de-CH")} / m²` : "Nicht verfügbar"}</strong>
+                  <small>{form.openDataLocation.market?.priceSource || "Keine ausreichend belastbaren öffentlichen Vergleichsdaten gefunden."}</small>
+                </div>
+                <div className={form.openDataLocation.market?.rentPerSqm ? "available" : "unavailable"}>
+                  <span>Marktmiet-Benchmark</span>
+                  <strong>{form.openDataLocation.market?.rentPerSqm != null ? `CHF ${form.openDataLocation.market.rentPerSqm.toFixed(2)} / m² / Monat` : "Nicht verfügbar"}</strong>
+                  <small>{form.openDataLocation.market?.rentSource || "Keine ausreichend belastbaren öffentlichen Mietdaten gefunden."}</small>
+                </div>
+              </div>
+
+              {form.openDataLocation.missing.length > 0 && (
+                <p className="open-data-missing">Nicht verfügbar: {form.openDataLocation.missing.join(", ")}. Diese Werte werden in der Analyse neutral behandelt und nicht durch erfundene Annahmen ersetzt.</p>
+              )}
+
+              <details className="open-data-sources">
+                <summary>Datenquellen, Datenebenen und Datenstand</summary>
+                {(form.openDataLocation.market?.tiers || []).map((tier) => (
+                  <div key={`${tier.tier}-${tier.name}`}><strong>Ebene {tier.tier}: {tier.name}</strong><span>{tier.detail}</span></div>
+                ))}
+                {form.openDataLocation.sources.map((source) => <div key={source.name}><strong>{source.name}</strong><span>{source.detail}</span></div>)}
+                <small>Geladen am {new Date(form.openDataLocation.loadedAt).toLocaleString("de-CH")}</small>
+              </details>
+            </section>
+          ) : null}
           <div className="form-footer">
             <button className="button secondary" onClick={() => setStep(2)}>
               Zurück

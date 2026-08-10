@@ -113,7 +113,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V4.0</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V4.1</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -128,8 +128,8 @@ export function Result() {
             ["Nettorendite", percent(result.netYield)],
             ["Eigenkapitalrendite", percent(result.equityReturn)],
             ["Cashflow / Monat", money(result.monthlyCashflow)],
-            ["Marktwert", money(market.estimatedMarketValue)],
-            ["Marktmiete / Monat", money(market.estimatedMonthlyMarketRent)],
+            ["Marktwert", market.marketValueAvailable ? money(market.estimatedMarketValue) : "Nicht verfügbar"],
+            ["Marktmiete / Monat", market.marketRentAvailable ? money(market.estimatedMonthlyMarketRent) : "Nicht verfügbar"],
             ["Lage", `${location.score}/100`],
           ].map(([label, value]) => (
             <article className="kpi" key={label}>
@@ -163,11 +163,7 @@ export function Result() {
             <span className="eyebrow">GESAMTBEURTEILUNG</span>
             <h2>{result.rating}</h2>
             <p>
-              Die Analyse kombiniert Rendite, Finanzierung, Lagequalität, Marktwert und
-              Marktmiete. Der geschätzte Marktwert liegt bei{" "}
-              <strong>{money(market.estimatedMarketValue)}</strong>; die aktuelle Miete
-              weicht um <strong>{percent(market.rentDifferencePercent)}</strong> vom
-              geschätzten Marktniveau ab.
+              Die Analyse kombiniert Rendite, Finanzierung und Lagequalität. {market.marketValueAvailable ? <>Der belastbar geschätzte Marktwert liegt bei <strong>{money(market.estimatedMarketValue)}</strong>. </> : <>Für den Marktwert liegen aktuell keine ausreichend belastbaren Vergleichsdaten vor. </>}{market.marketRentAvailable ? <>Die aktuelle Miete weicht um <strong>{percent(market.rentDifferencePercent)}</strong> vom geschätzten Marktniveau ab.</> : <>Eine Marktmietschätzung wird ohne belastbaren Benchmark bewusst nicht ausgegeben.</>}
             </p>
             <div className="pros-cons">
               <div>
@@ -191,121 +187,19 @@ export function Result() {
         </section>
 
         <section className="panel report-section">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">MARKTPREISANALYSE</span>
-              <h2>Marktwert und Kaufpreis</h2>
-            </div>
-            <TrendingUp size={24} />
-          </div>
-          <div className="market-summary">
-            <div className="market-highlight">
-              <span>Geschätzter Marktwert</span>
-              <strong>{money(market.estimatedMarketValue)}</strong>
-              <small>
-                Bandbreite {money(market.marketValueLow)} – {money(market.marketValueHigh)}
-              </small>
-            </div>
-            <div
-              className={`market-verdict ${market.priceDifference >= 0 ? "positive" : "negative"}`}
-            >
-              <span>{market.priceRating}</span>
-              <strong>{signedMoney(market.priceDifference)}</strong>
-              <small>{percent(market.priceDifferencePercent)} gegenüber Kaufpreis</small>
-            </div>
-          </div>
-          <div className="detail-grid">
-            <div>
-              <span>Regionaler Benchmark</span>
-              <strong>{money(market.benchmarkPricePerSqm)} / m²</strong>
-            </div>
-            <div>
-              <span>Angepasster Objektwert</span>
-              <strong>{money(market.adjustedPricePerSqm)} / m²</strong>
-            </div>
-            <div>
-              <span>Kaufpreis / m²</span>
-              <strong>{money(result.pricePerSqm)} / m²</strong>
-            </div>
-            <div>
-              <span>Datenradius</span>
-              <strong>{input.marketDataRadiusKm} km</strong>
-            </div>
-            <div>
-              <span>Modellsicherheit</span>
-              <strong className="capitalize">{market.confidence}</strong>
-            </div>
-          </div>
+          <div className="section-heading"><div><span className="eyebrow">MARKTPREISANALYSE</span><h2>Marktwert und Kaufpreis</h2></div><TrendingUp size={24} /></div>
+          {market.marketValueAvailable ? <>
+            <div className="market-summary"><div className="market-highlight"><span>Geschätzter Marktwert</span><strong>{money(market.estimatedMarketValue)}</strong><small>Bandbreite {money(market.marketValueLow)} – {money(market.marketValueHigh)}</small></div><div className={`market-verdict ${market.priceDifference >= 0 ? "positive" : "negative"}`}><span>{market.priceRating}</span><strong>{signedMoney(market.priceDifference)}</strong><small>{percent(market.priceDifferencePercent)} gegenüber Kaufpreis</small></div></div>
+            <div className="detail-grid"><div><span>Regionaler Benchmark</span><strong>{money(market.benchmarkPricePerSqm)} / m²</strong></div><div><span>Angepasster Objektwert</span><strong>{money(market.adjustedPricePerSqm)} / m²</strong></div><div><span>Kaufpreis / m²</span><strong>{money(result.pricePerSqm)} / m²</strong></div><div><span>Modellsicherheit</span><strong className="capitalize">{market.confidence}</strong></div></div>
+          </> : <div className="market-unavailable-panel"><strong>Marktwert derzeit nicht verfügbar</strong><p>Für diesen Standort wurden keine ausreichend belastbaren öffentlichen Preisbenchmarks gefunden. HomeIQ zeigt deshalb bewusst keinen modellierten Ersatzwert.</p></div>}
         </section>
 
         <section className="panel report-section">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">MARKTMIETANALYSE</span>
-              <h2>Ist-Miete und Mietpotenzial</h2>
-            </div>
-            <TrendingUp size={24} />
-          </div>
-          <div className="market-summary">
-            <div className="market-highlight">
-              <span>Geschätzte Marktmiete / Monat</span>
-              <strong>{money(market.estimatedMonthlyMarketRent)}</strong>
-              <small>Benchmark {money(market.benchmarkRentPerSqm)} / m²</small>
-            </div>
-            <div
-              className={`market-verdict ${market.rentDifferenceMonthly >= 0 ? "positive" : "negative"}`}
-            >
-              <span>{market.rentRating}</span>
-              <strong>{signedMoney(market.rentDifferenceMonthly)} / Monat</strong>
-              <small>{percent(market.rentDifferencePercent)} zur aktuellen Miete</small>
-            </div>
-          </div>
-          {market.units.length > 0 && (
-            <div className="table-wrap">
-              <table className="market-table">
-                <thead>
-                  <tr>
-                    <th>Wohnung</th>
-                    <th>Zimmer</th>
-                    <th>Fläche</th>
-                    <th>Ist-Miete</th>
-                    <th>Marktmiete</th>
-                    <th>Differenz</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {market.units.map((unit) => (
-                    <tr key={unit.id}>
-                      <td>
-                        <strong>{unit.label}</strong>
-                        <small>{unit.floor}</small>
-                      </td>
-                      <td>{unit.rooms}</td>
-                      <td>{number(unit.livingArea)} m²</td>
-                      <td>{money(unit.currentMonthlyRent)}</td>
-                      <td>{money(unit.estimatedMonthlyMarketRent)}</td>
-                      <td
-                        className={
-                          unit.differenceMonthly >= 0 ? "positive-text" : "negative-text"
-                        }
-                      >
-                        {signedMoney(unit.differenceMonthly)}
-                        <small>{percent(unit.differencePercent)}</small>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <th colSpan={3}>Gesamt</th>
-                    <th>{money(market.currentMonthlyRent)}</th>
-                    <th>{money(market.estimatedMonthlyMarketRent)}</th>
-                    <th>{signedMoney(market.rentDifferenceMonthly)}</th>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
+          <div className="section-heading"><div><span className="eyebrow">MARKTMIETANALYSE</span><h2>Ist-Miete und Mietpotenzial</h2></div><TrendingUp size={24} /></div>
+          {market.marketRentAvailable ? <>
+            <div className="market-summary"><div className="market-highlight"><span>Geschätzte Marktmiete / Monat</span><strong>{money(market.estimatedMonthlyMarketRent)}</strong><small>Benchmark {money(market.benchmarkRentPerSqm)} / m²</small></div><div className={`market-verdict ${market.rentDifferenceMonthly >= 0 ? "positive" : "negative"}`}><span>{market.rentRating}</span><strong>{signedMoney(market.rentDifferenceMonthly)} / Monat</strong><small>{percent(market.rentDifferencePercent)} zur aktuellen Miete</small></div></div>
+            {market.units.length > 0 && <div className="table-wrap"><table className="market-table"><thead><tr><th>Wohnung</th><th>Zimmer</th><th>Fläche</th><th>Ist-Miete</th><th>Marktmiete</th><th>Differenz</th></tr></thead><tbody>{market.units.map((unit)=><tr key={unit.id}><td><strong>{unit.label}</strong><small>{unit.floor}</small></td><td>{unit.rooms}</td><td>{number(unit.livingArea)} m²</td><td>{money(unit.currentMonthlyRent)}</td><td>{money(unit.estimatedMonthlyMarketRent)}</td><td className={unit.differenceMonthly >= 0 ? "positive-text" : "negative-text"}>{signedMoney(unit.differenceMonthly)}<small>{percent(unit.differencePercent)}</small></td></tr>)}</tbody></table></div>}
+          </> : <div className="market-unavailable-panel"><strong>Marktmiete derzeit nicht verfügbar</strong><p>Für diesen Standort wurden keine ausreichend belastbaren öffentlichen Mietbenchmarks gefunden. Die eingegebene Ist-Miete wird nicht als Marktwert interpretiert.</p></div>}
         </section>
 
         <section className="panel report-section">
@@ -395,7 +289,7 @@ export function Result() {
           <span>Erstellt am {new Date(input.createdAt).toLocaleDateString("de-CH")}</span>
         </footer>
         <p className="disclaimer">
-          Lageanalyse auf Basis amtlicher Schweizer Open Data und OpenStreetMap. Marktwerte bleiben modellbasiert. Keine
+          Lageanalyse auf Basis amtlicher Schweizer Open Data und OpenStreetMap. Marktwerte und Marktmieten werden nur bei ausreichend belastbaren Benchmarks ausgegeben. Keine
           Anlage-, Steuer-, Rechts- oder Verkehrswertberatung.
         </p>
       </div>
@@ -403,7 +297,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V4.0</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V4.1</span></div>
             <h1>{input.title}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
@@ -456,47 +350,10 @@ export function Result() {
         <section className="print-section print-market">
           <h2>PREMIUM-MARKTANALYSE</h2>
           <div className="print-market-columns">
-            <div>
-              <span>OPTIMALER KAUFPREIS</span>
-              <h3>{money(market.estimatedMarketValue)}</h3>
-              <p>
-                Marktwertspanne {money(market.marketValueLow)} – {money(market.marketValueHigh)}
-              </p>
-              <p>
-                Eingabe {money(input.purchasePrice)} · Abweichung {percent(market.priceDifferencePercent)}
-              </p>
-            </div>
-            <div>
-              <span>MARKTMIETE</span>
-              <h3>{money(market.estimatedMonthlyMarketRent)} / Monat</h3>
-              <p>Benchmark {money(market.benchmarkRentPerSqm)} / m²</p>
-              <p>
-                Ist-Miete {money(market.currentMonthlyRent)} · Abweichung {percent(market.rentDifferencePercent)}
-              </p>
-            </div>
+            <div className={!market.marketValueAvailable ? "print-unavailable" : ""}><span>OPTIMALER KAUFPREIS</span>{market.marketValueAvailable ? <><h3>{money(market.estimatedMarketValue)}</h3><p>Marktwertspanne {money(market.marketValueLow)} – {money(market.marketValueHigh)}</p><p>Eingabe {money(input.purchasePrice)} · Abweichung {percent(market.priceDifferencePercent)}</p></> : <><h3>Nicht verfügbar</h3><p>Kein ausreichend belastbarer öffentlicher Preisbenchmark gefunden.</p></>}</div>
+            <div className={!market.marketRentAvailable ? "print-unavailable" : ""}><span>MARKTMIETE</span>{market.marketRentAvailable ? <><h3>{money(market.estimatedMonthlyMarketRent)} / Monat</h3><p>Benchmark {money(market.benchmarkRentPerSqm)} / m²</p><p>Ist-Miete {money(market.currentMonthlyRent)} · Abweichung {percent(market.rentDifferencePercent)}</p></> : <><h3>Nicht verfügbar</h3><p>Kein ausreichend belastbarer öffentlicher Mietbenchmark gefunden.</p></>}</div>
           </div>
-          {market.units.length > 0 && (
-            <table className="print-unit-table">
-              <thead>
-                <tr>
-                  <th>Wohnung</th>
-                  <th>m²</th>
-                  <th>Ist</th>
-                  <th>Markt</th>
-                </tr>
-              </thead>
-              <tbody>
-                {market.units.slice(0, 8).map((unit) => (
-                  <tr key={unit.id}>
-                    <td>{unit.label}</td>
-                    <td>{number(unit.livingArea)}</td>
-                    <td>{money(unit.currentMonthlyRent)}</td>
-                    <td>{money(unit.estimatedMonthlyMarketRent)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          {market.marketRentAvailable && market.units.length > 0 && <table className="print-unit-table"><thead><tr><th>Wohnung</th><th>m²</th><th>Ist</th><th>Markt</th></tr></thead><tbody>{market.units.slice(0,8).map((unit)=><tr key={unit.id}><td>{unit.label}</td><td>{number(unit.livingArea)}</td><td>{money(unit.currentMonthlyRent)}</td><td>{money(unit.estimatedMonthlyMarketRent)}</td></tr>)}</tbody></table>}
         </section>
 
         <section className="print-section print-bottom-grid">
@@ -537,11 +394,7 @@ export function Result() {
             <h2>LAGE</h2>
             <div className="print-location-score">{location.score}/100 · {location.rating}</div>
             <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} coordinates={input.openDataLocation?.address ?? null} print />
-            {location.factors.slice(0, 3).map((factor) => (
-              <p key={factor.label}>
-                {factor.label}: {factor.score}/100
-              </p>
-            ))}
+
           </div>
         </section>
 
