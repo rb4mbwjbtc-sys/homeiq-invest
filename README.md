@@ -1,4 +1,13 @@
-# HomeIQ Independent V4.8 – Federated Swiss Data Gateway
+# HomeIQ Independent V4.9 – Verified Swiss Noise Access
+
+V4.9 baut auf V4.8 auf und lässt die funktionierenden Module für Adresse/GWR, ÖV, Einkauf, Schule/Betreuung, Autobahn und Leerstand unverändert. Nur der Lärmzugriff wurde neu implementiert.
+
+## Warum V4.8 keine BAFU-Lärmdaten fand
+
+Die BAFU-Layer `ch.bafu.laerm-strassenlaerm_tag`, `..._nacht`, `ch.bafu.laerm-bahnlaerm_tag` und `..._nacht` sind Raster-/WMTS-Layer und laut aktuellem GeoAdmin LayersTable nicht über den MapServer-Identify-Dienst abfragbar. Deshalb konnten auch korrekte Point-/Envelope-Identify-Abfragen keinen Rasterwert liefern.
+
+V4.9 nutzt deshalb den offiziellen GeoAdmin-WMS-Dienst mit `GetFeatureInfo` für die BAFU-Raster. BAV-Eisenbahn-Immissionen bleiben über den querybaren GeoAdmin-Identify-Weg angebunden. Die Suche erfolgt am Objekt und, falls nötig, distanzgewichtet in 25/50/100/250 m Entfernung.
+
 
 V4.8 baut technisch auf V3.1 auf und ersetzt die Idee einer selbst zu pflegenden Schweizer Voll-Datenbank durch eine föderierte Quellenarchitektur.
 

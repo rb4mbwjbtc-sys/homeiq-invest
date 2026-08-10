@@ -1,5 +1,6 @@
 const GEOADMIN_SEARCH = "https://api3.geo.admin.ch/rest/services/ech/SearchServer";
 const GEOADMIN_IDENTIFY = "https://api3.geo.admin.ch/rest/services/ech/MapServer/identify";
+const GEOADMIN_WMS = "https://wms.geo.admin.ch/";
 const PXWEB_VACANCY = "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0902020300_101/px-x-0902020300_101/px-x-0902020300_101.px";
 const TRANSPORT_LOCATIONS = "https://transport.opendata.ch/v1/locations";
 const OPENDATA_SEARCH = "https://ckan.opendata.swiss/api/3/action/package_search";
@@ -46,7 +47,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4200) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/4.8 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/4.9 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -66,7 +67,7 @@ async function fetchText(url, options = {}, timeoutMs = 3500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,application/geo+json,application/json,*/*",
-        "User-Agent": "HomeIQ-Invest/4.8 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/4.9 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -206,6 +207,177 @@ async function identifyNoiseEnvelope(layerIds, geo, radiusMeters) {
   return payload.results || [];
 }
 
+
+function parseNoiseDbFromText(text) {
+  if (!text) return null;
+  const lines = String(text).split(/\r?\n/);
+  const preferred = [];
+  const fallback = [];
+  for (const line of lines) {
+    const normalized = line.toLowerCase();
+    const matches = line.replace(/,/g, ".").match(/-?\d+(?:\.\d+)?/g) || [];
+    for (const token of matches) {
+      const value = Number(token);
+      if (!Number.isFinite(value) || value < 30 || value > 100) continue;
+      if (["gray", "value", "wert", "lr", "db", "pixel", "band", "immission", "noise", "laerm", "lärm"].some((key) => normalized.includes(key))) preferred.push(value);
+      else fallback.push(value);
+    }
+  }
+  const values = preferred.length ? preferred : fallback;
+  return values.length ? Math.max(...values) : null;
+}
+
+function parseWmsNoiseText(text, layerIds, distanceMeters, method) {
+  const candidates = [];
+  const raw = String(text || "");
+  for (const layer of layerIds) {
+    const meta = noiseKeyForLayer(layer);
+    if (!meta) continue;
+    const quoted = `Layer '${layer}'`;
+    const start = raw.indexOf(quoted);
+    if (start < 0) continue;
+    const next = raw.indexOf("Layer '", start + quoted.length);
+    const segment = raw.slice(start, next >= 0 ? next : raw.length);
+    const db = parseNoiseDbFromText(segment);
+    if (db == null) continue;
+    candidates.push({
+      ...meta,
+      db,
+      distanceMeters: Math.round(distanceMeters),
+      radiusMeters: Math.round(distanceMeters),
+      burden: noiseBurden(db, distanceMeters),
+      layer,
+      method,
+    });
+  }
+  return candidates;
+}
+
+async function wmsNoiseAt(geo, layerIds, easting, northing, distanceMeters, method) {
+  // The BAFU road/rail noise layers are raster/WMTS layers and are not
+  // queryable through the GeoAdmin MapServer identify endpoint. WMS
+  // GetFeatureInfo is the supported route for querying the rendered raster.
+  const half = 50;
+  const params = new URLSearchParams({
+    SERVICE: "WMS",
+    VERSION: "1.3.0",
+    REQUEST: "GetFeatureInfo",
+    FORMAT: "image/png",
+    TRANSPARENT: "true",
+    LAYERS: layerIds.join(","),
+    QUERY_LAYERS: layerIds.join(","),
+    STYLES: "",
+    CRS: "EPSG:2056",
+    BBOX: `${easting - half},${northing - half},${easting + half},${northing + half}`,
+    WIDTH: "101",
+    HEIGHT: "101",
+    I: "50",
+    J: "50",
+    INFO_FORMAT: "text/plain",
+    FEATURE_COUNT: "20",
+    LANG: "de",
+  });
+  const text = await fetchText(`${GEOADMIN_WMS}?${params}`, {}, 2800);
+  return parseWmsNoiseText(text, layerIds, distanceMeters, method);
+}
+
+function samplePointsAround(geo, radiusMeters) {
+  if (radiusMeters <= 0) return [{ easting: geo.easting, northing: geo.northing, distanceMeters: 0, label: "Objektpunkt" }];
+  const points = [];
+  for (let index = 0; index < 8; index += 1) {
+    const angle = (Math.PI * 2 * index) / 8;
+    points.push({
+      easting: geo.easting + Math.cos(angle) * radiusMeters,
+      northing: geo.northing + Math.sin(angle) * radiusMeters,
+      distanceMeters: radiusMeters,
+      label: `${radiusMeters} m`,
+    });
+  }
+  return points;
+}
+
+async function fetchBafuRasterNoise(geo) {
+  const rasterLayers = [LAYERS.roadNoiseDay, LAYERS.roadNoiseNight, LAYERS.railNoiseDay, LAYERS.railNoiseNight];
+  const found = {};
+  const diagnostics = [];
+
+  const accept = (candidates) => {
+    for (const key of ["roadDay", "roadNight", "railDay", "railNight"]) {
+      const options = candidates.filter((candidate) => candidate.key === key);
+      if (!options.length) continue;
+      options.sort((a, b) => (b.burden - a.burden) || (b.db - a.db) || (a.distanceMeters - b.distanceMeters));
+      const candidate = options[0];
+      if (!found[key] || candidate.distanceMeters < found[key].distanceMeters || candidate.burden > found[key].burden) found[key] = candidate;
+    }
+  };
+
+  // Exact object point first. In populated areas this should usually be enough.
+  try {
+    const exact = await wmsNoiseAt(geo, rasterLayers, geo.easting, geo.northing, 0, "WMS Objektpunkt");
+    accept(exact);
+    diagnostics.push({ radius: 0, method: "wms", status: exact.length ? "loaded" : "not_found", count: exact.length });
+  } catch (error) {
+    diagnostics.push({ radius: 0, method: "wms", status: errorStatus(error) });
+  }
+
+  // If one or more noise categories are missing, sample eight directions at
+  // increasing physical distances. One request queries all four raster layers.
+  for (const radius of [25, 50, 100, 250]) {
+    const missing = ["roadDay", "roadNight", "railDay", "railNight"].some((key) => !found[key]);
+    if (!missing) break;
+    const points = samplePointsAround(geo, radius);
+    const settled = await Promise.allSettled(points.map((point) => wmsNoiseAt(
+      geo,
+      rasterLayers,
+      point.easting,
+      point.northing,
+      point.distanceMeters,
+      `WMS Umgebung ${point.label}`,
+    )));
+    let loaded = 0;
+    let errors = 0;
+    for (const result of settled) {
+      if (result.status === "fulfilled") {
+        loaded += result.value.length;
+        accept(result.value);
+      } else {
+        errors += 1;
+      }
+    }
+    diagnostics.push({ radius, method: "wms-grid", status: loaded ? "loaded" : errors === settled.length ? "error" : "not_found", count: loaded });
+  }
+  return { found, diagnostics };
+}
+
+async function fetchBavVectorNoise(geo) {
+  const layers = [LAYERS.railNoiseEffectiveDay, LAYERS.railNoiseEffectiveNight];
+  const found = {};
+  const diagnostics = [];
+  const addCandidates = (results, radius, method) => {
+    const candidates = (results || []).map((result) => parseNoiseCandidate(result, geo, radius)).filter(Boolean);
+    for (const candidate of candidates) candidate.method = method;
+    for (const key of ["railDay", "railNight"]) {
+      const options = candidates.filter((candidate) => candidate.key === key);
+      if (!options.length) continue;
+      options.sort((a, b) => (b.priority - a.priority) || (b.burden - a.burden) || (a.distanceMeters - b.distanceMeters));
+      const candidate = options[0];
+      if (!found[key] || candidate.distanceMeters < found[key].distanceMeters || candidate.priority > found[key].priority) found[key] = candidate;
+    }
+  };
+
+  for (const radius of [0, 25, 50, 100, 250]) {
+    try {
+      const results = radius === 0 ? await identifyNoisePoint(layers, geo, 0) : await identifyNoiseEnvelope(layers, geo, radius);
+      addCandidates(results, radius, radius === 0 ? "BAV Objektpunkt" : `BAV Fläche ±${radius} m`);
+      diagnostics.push({ radius, method: "bav-identify", status: results.length ? "loaded" : "not_found", count: results.length });
+    } catch (error) {
+      diagnostics.push({ radius, method: "bav-identify", status: errorStatus(error) });
+    }
+    if (found.railDay && found.railNight) break;
+  }
+  return { found, diagnostics };
+}
+
 function minDistanceToBboxMeters(bbox, geo) {
   if (!Array.isArray(bbox) || bbox.length < 4) return null;
   const [minX, minY, maxX, maxY] = bbox.map(Number);
@@ -280,63 +452,22 @@ function parseNoiseCandidate(result, geo, radiusMeters) {
 }
 
 async function fetchNoiseBundle(geo) {
-  const layers = [
-    LAYERS.roadNoiseDay, LAYERS.roadNoiseNight,
-    LAYERS.railNoiseEffectiveDay, LAYERS.railNoiseEffectiveNight,
-    LAYERS.railNoiseDay, LAYERS.railNoiseNight,
-  ];
-  const found = {};
-  const diagnostics = [];
+  // Important: the BAFU road/rail noise maps are raster layers (LayersTable:
+  // WMTS, not MapServer-queryable). Query them through WMS GetFeatureInfo.
+  // BAV railway actual-immissions are vector/queryable and remain on identify.
+  const [raster, bav] = await Promise.all([
+    fetchBafuRasterNoise(geo),
+    fetchBavVectorNoise(geo),
+  ]);
 
-  const addCandidates = (results, radius, method) => {
-    const candidates = (results || []).map((result) => parseNoiseCandidate(result, geo, radius)).filter(Boolean);
-    for (const candidate of candidates) candidate.method = method;
-    for (const key of ["roadDay", "roadNight", "railDay", "railNight"]) {
-      const options = candidates.filter((candidate) => candidate.key === key);
-      if (!options.length) continue;
-      options.sort((a, b) => (b.priority - a.priority) || (b.burden - a.burden) || (a.distanceMeters - b.distanceMeters));
-      const candidate = options[0];
-      if (!found[key] || candidate.distanceMeters < found[key].distanceMeters || candidate.priority > found[key].priority) {
-        found[key] = candidate;
-      }
-    }
-  };
-
-  // 1) exact object point, no tolerance
-  try {
-    const exact = await identifyNoisePoint(layers, geo, 0);
-    addCandidates(exact, 0, "Punkt exakt");
-    diagnostics.push({ radius: 0, method: "point", status: exact.length ? "loaded" : "not_found", count: exact.length });
-  } catch (error) {
-    diagnostics.push({ radius: 0, method: "point", status: errorStatus(error) });
+  const found = { ...(raster?.found || {}) };
+  // BAV actual railway immissions are legally stronger/more specific than the
+  // BAFU modelled railway raster, so prefer them when they are available.
+  for (const key of ["railDay", "railNight"]) {
+    if (bav?.found?.[key]) found[key] = bav.found[key];
   }
 
-  // 2) documented GeoAdmin point-buffer logic: tolerance in px + 1 m/px scale.
-  // 3) envelope fallback at the same physical radius.
-  for (const radius of [25, 50, 100, 250]) {
-    let pointResults = [];
-    try {
-      pointResults = await identifyNoisePoint(layers, geo, radius);
-      addCandidates(pointResults, radius, `Punkt ±${radius} m`);
-      diagnostics.push({ radius, method: "point", status: pointResults.length ? "loaded" : "not_found", count: pointResults.length });
-    } catch (error) {
-      diagnostics.push({ radius, method: "point", status: errorStatus(error) });
-    }
-
-    const missingKeys = ["roadDay", "roadNight", "railDay", "railNight"].filter((key) => !found[key]);
-    if (missingKeys.length) {
-      try {
-        const envelopeResults = await identifyNoiseEnvelope(layers, geo, radius);
-        addCandidates(envelopeResults, radius, `Fläche ±${radius} m`);
-        diagnostics.push({ radius, method: "envelope", status: envelopeResults.length ? "loaded" : "not_found", count: envelopeResults.length });
-      } catch (error) {
-        diagnostics.push({ radius, method: "envelope", status: errorStatus(error) });
-      }
-    }
-
-    if (found.roadDay && found.roadNight && found.railDay && found.railNight) break;
-  }
-
+  const diagnostics = [...(raster?.diagnostics || []), ...(bav?.diagnostics || [])];
   const all = Object.values(found);
   if (!all.length) return { noData: true, diagnostics };
   const strongest = [...all].sort((a, b) => (b.burden - a.burden) || (b.db - a.db))[0];
@@ -768,7 +899,7 @@ export default async function handler(req, res) {
     const noise = noiseD.value;
     if (noise?.noData && noiseD?.diagnostic) {
       noiseD.diagnostic.status = "not_found";
-      noiseD.diagnostic.detail = `GeoAdmin Lärmsuche ohne Treffer: ${noise.diagnostics?.map((d) => `${d.method}:${d.radius}m=${d.status}`).join(", ") || "keine Treffer"}`;
+      noiseD.diagnostic.detail = `GeoAdmin WMS/Identify-Lärmsuche ohne Treffer: ${noise.diagnostics?.map((d) => `${d.method}:${d.radius}m=${d.status}`).join(", ") || "keine Treffer"}`;
     }
     const roadNoiseDayDb = noise?.roadDay?.db ?? null;
     const roadNoiseNightDb = noise?.roadNight?.db ?? null;
@@ -884,7 +1015,7 @@ export default async function handler(req, res) {
         { name: "swisstopo / GeoAdmin", detail: "Amtliche Adresse, Gemeinde und Gebäudeverknüpfung" },
         { name: "Bundesamt für Statistik BFS", detail: "GWR und Leerwohnungsziffer; Gemeinde wird über die BFS-Nummer zugeordnet" },
         { name: "Bundesamt für Raumentwicklung ARE", detail: "ÖV-Güteklasse" },
-        { name: "BAFU / BAV via GeoAdmin", detail: "Strassen- und Bahnlärm getrennt für Tag/Nacht; Suche am Objekt sowie 25/50/100/250 m. Der Einfluss nimmt mit der Distanz ab." },
+        { name: "BAFU / BAV via GeoAdmin", detail: "BAFU-Strassen-/Bahnlärm wird als Raster über den offiziellen GeoAdmin-WMS-GetFeatureInfo-Dienst abgefragt; BAV-Eisenbahn-Immissionen zusätzlich über GeoAdmin Identify. Suche am Objekt sowie 25/50/100/250 m, distanzgewichtet." },
         { name: "OpenTransportData / transport.opendata.ch", detail: "Nächster ÖV-Servicepunkt" },
         { name: "opendata.swiss", detail: "Offizielle kantonale/kommunale Schul-, Betreuungs- und Leerstandsdaten, sofern maschinenlesbar verfügbar" },
         { name: "OpenStreetMap", detail: "Einkauf, Schule/Betreuung und Autobahnanschlüsse über zwei unabhängige OSM-Zugriffswege (Photon und Overpass), mit gestaffelten Radien" },
