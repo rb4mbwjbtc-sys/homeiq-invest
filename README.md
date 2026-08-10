@@ -1,6 +1,6 @@
-# HomeIQ Independent V4.7 – Federated Swiss Data Gateway
+# HomeIQ Independent V4.8 – Federated Swiss Data Gateway
 
-V4.7 baut technisch auf V3.1 auf und ersetzt die Idee einer selbst zu pflegenden Schweizer Voll-Datenbank durch eine föderierte Quellenarchitektur.
+V4.8 baut technisch auf V3.1 auf und ersetzt die Idee einer selbst zu pflegenden Schweizer Voll-Datenbank durch eine föderierte Quellenarchitektur.
 
 ## Datenebene 1 – schweizweite offene/amtliche Quellen
 
@@ -13,7 +13,7 @@ Aktiv eingebunden:
 - OpenTransportData / transport.opendata.ch: nächster ÖV-Servicepunkt
 - OpenStreetMap als nicht blockierender Fallback für Einkauf, Schule/Betreuung und Autobahn
 
-ESTV ist in der Quellenmatrix vorgesehen. V4.7 verwendet bewusst keinen undokumentierten Webseiten-Scraper für den Steuerrechner.
+ESTV ist in der Quellenmatrix vorgesehen. V4.8 verwendet bewusst keinen undokumentierten Webseiten-Scraper für den Steuerrechner.
 
 ## Datenebene 2 – kantonale und kommunale Open Data
 
@@ -29,7 +29,7 @@ Die Architektur enthält die Quellenhierarchie für:
 - ImmoScout24 / SMG
 - Comparis Immobilien
 
-Diese Adapter sind in V4.7 bewusst deaktiviert, solange kein offizieller API-/Lizenzzugang besteht. Es wird kein automatisiertes Scraping eingebaut.
+Diese Adapter sind in V4.8 bewusst deaktiviert, solange kein offizieller API-/Lizenzzugang besteht. Es wird kein automatisiertes Scraping eingebaut.
 
 ## Verhalten bei fehlenden Marktdaten
 
@@ -45,10 +45,10 @@ Wenn Ebene 1 und 2 keinen belastbaren lokalen CHF/m²- oder Miet-Benchmark liefe
 
 ## Deployment
 
-Wie bisher über GitHub → Vercel. Es sind für V4.7 keine neuen Environment Variables erforderlich.
+Wie bisher über GitHub → Vercel. Es sind für V4.8 keine neuen Environment Variables erforderlich.
 
 
-## V4.7 – Reliable Location Data
+## V4.8 – Reliable Location Data
 
 - Lage & Markt ist vollständig automatisch; technische Eingabefelder wurden entfernt.
 - POI-Suche erweitert adaptiv: Einkauf/Schule bis 20 km, Autobahnanschlüsse bis 50 km.
@@ -57,7 +57,7 @@ Wie bisher über GitHub → Vercel. Es sind für V4.7 keine neuen Environment Va
 - Keine CHF-0-Benchmarks oder künstlichen Ersatzwerte.
 - PDF-Layout wurde für den A4-Einseitenexport stabilisiert.
 
-## V4.7 – Hybrid POI & Noise Reliability
+## V4.8 – Hybrid POI & Noise Reliability
 
 - ÖV bleibt auf der spezialisierten Schweizer Open-Transport-Pipeline.
 - Schulen/Betreuung: offizielle kantonale/kommunale Ressourcen von opendata.swiss zuerst; Parser unterstützt nun WGS84 sowie Schweizer LV03/LV95-Koordinaten. OSM dient als Fallback.
@@ -66,9 +66,9 @@ Wie bisher über GitHub → Vercel. Es sind für V4.7 keine neuen Environment Va
 - Lärm: BAFU-Strassen-/Bahnlärm plus BAV-Layer für effektive Eisenbahnlärm-Immissionen als zusätzliche offizielle Quelle.
 - Die Quellenanzeige weist für Einkauf, Schule, Autobahn und Lärm die tatsächlich verwendete Quelle aus.
 
-## V4.7 – Distance-weighted Swiss Noise Module
+## V4.8 – Distance-weighted Swiss Noise Module
 
-V4.7 lässt die in V4.6 funktionierenden Module für ÖV, Einkauf, Schule/Betreuung, Autobahn, Leerstand und Gebäude unverändert und ersetzt ausschliesslich die Lärmlogik.
+V4.8 lässt die in V4.6 funktionierenden Module für ÖV, Einkauf, Schule/Betreuung, Autobahn, Leerstand und Gebäude unverändert und ersetzt ausschliesslich die Lärmlogik.
 
 - offizielle GeoAdmin-Layer für Strassenlärm Tag/Nacht sowie Bahn Tag/Nacht
 - BAV effektive Eisenbahn-Immissionen werden gegenüber dem BAFU-Modell bevorzugt, wenn verfügbar
@@ -76,3 +76,15 @@ V4.7 lässt die in V4.6 funktionierenden Module für ÖV, Einkauf, Schule/Betreu
 - Distanzgewichtung des negativen Einflusses: ≤25 m 100 %, ≤50 m 90 %, ≤100 m 70 %, ≤250 m 40 %, darüber 0 %
 - Strasse und Bahn sowie Tag/Nacht werden getrennt gespeichert
 - fehlende Lärmdaten bleiben transparent nicht verfügbar; es werden keine Ersatzwerte erfunden
+
+## V4.8 – GeoAdmin Noise Radius Fix
+
+V4.8 lässt die funktionierenden V4.7-Module unverändert und korrigiert ausschliesslich die GeoAdmin-Lärmsuche:
+
+- LV95 / `sr=2056`
+- exakter Punkt-Treffer mit `tolerance=0`
+- dokumentierte Point-Identify-Radien 25/50/100/250 m mit exakt 1 m pro Pixel
+- Envelope-Abfrage als unabhängiger Fallback im gleichen physischen Radius
+- Strassen- und Bahnlärm jeweils Tag/Nacht getrennt
+- distanzgewichteter Einfluss bleibt unverändert
+- technische Diagnose zeigt Punkt-/Envelope-Treffer oder `not_found`

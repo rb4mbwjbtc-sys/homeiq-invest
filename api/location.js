@@ -46,7 +46,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4200) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/4.7 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/4.8 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -66,7 +66,7 @@ async function fetchText(url, options = {}, timeoutMs = 3500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,application/geo+json,application/json,*/*",
-        "User-Agent": "HomeIQ-Invest/4.7 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/4.8 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -155,8 +155,36 @@ async function identifyLayers(layerIds, geo, tolerance = 8, radiusMeters = 120) 
   return map;
 }
 
+async function identifyNoisePoint(layerIds, geo, radiusMeters = 0) {
+  const radius = Math.max(0, Number(radiusMeters) || 0);
+  // GeoAdmin tolerance is expressed in pixels. We deliberately configure
+  // mapExtent/imageDisplay at 1 LV95 metre per pixel, so tolerance == metres.
+  const extentRadius = Math.max(50, radius, 250);
+  const sizePx = Math.max(100, Math.round(extentRadius * 2));
+  const params = new URLSearchParams({
+    geometry: `${geo.easting},${geo.northing}`,
+    geometryType: "esriGeometryPoint",
+    geometryFormat: "geojson",
+    sr: "2056",
+    layers: `all:${layerIds.join(",")}`,
+    returnGeometry: "true",
+    lang: "de",
+    limit: "200",
+    tolerance: String(Math.round(radius)),
+  });
+  if (radius > 0) {
+    params.set("mapExtent", `${geo.easting - extentRadius},${geo.northing - extentRadius},${geo.easting + extentRadius},${geo.northing + extentRadius}`);
+    params.set("imageDisplay", `${sizePx},${sizePx},96`);
+  } else {
+    params.set("mapExtent", "0,0,0,0");
+    params.set("imageDisplay", "0,0,0");
+  }
+  const payload = await fetchJson(`${GEOADMIN_IDENTIFY}?${params}`, {}, 4200);
+  return payload.results || [];
+}
+
 async function identifyNoiseEnvelope(layerIds, geo, radiusMeters) {
-  const r = Math.max(1, radiusMeters);
+  const r = Math.max(1, Number(radiusMeters) || 1);
   const minX = geo.easting - r;
   const minY = geo.northing - r;
   const maxX = geo.easting + r;
@@ -166,15 +194,15 @@ async function identifyNoiseEnvelope(layerIds, geo, radiusMeters) {
     geometryType: "esriGeometryEnvelope",
     geometryFormat: "geojson",
     sr: "2056",
-    imageDisplay: "1000,1000,96",
-    mapExtent: `${minX},${minY},${maxX},${maxY}`,
+    imageDisplay: "0,0,0",
+    mapExtent: "0,0,0,0",
     tolerance: "0",
     layers: `all:${layerIds.join(",")}`,
     returnGeometry: "true",
     lang: "de",
     limit: "200",
   });
-  const payload = await fetchJson(`${GEOADMIN_IDENTIFY}?${params}`, {}, 3800);
+  const payload = await fetchJson(`${GEOADMIN_IDENTIFY}?${params}`, {}, 4200);
   return payload.results || [];
 }
 
@@ -258,25 +286,59 @@ async function fetchNoiseBundle(geo) {
     LAYERS.railNoiseDay, LAYERS.railNoiseNight,
   ];
   const found = {};
-  for (const radius of [25, 50, 100, 250]) {
-    let results = [];
-    try {
-      results = await identifyNoiseEnvelope(layers, geo, radius);
-    } catch {
-      continue;
-    }
-    const candidates = results.map((result) => parseNoiseCandidate(result, geo, radius)).filter(Boolean);
+  const diagnostics = [];
+
+  const addCandidates = (results, radius, method) => {
+    const candidates = (results || []).map((result) => parseNoiseCandidate(result, geo, radius)).filter(Boolean);
+    for (const candidate of candidates) candidate.method = method;
     for (const key of ["roadDay", "roadNight", "railDay", "railNight"]) {
-      if (found[key]) continue;
       const options = candidates.filter((candidate) => candidate.key === key);
       if (!options.length) continue;
       options.sort((a, b) => (b.priority - a.priority) || (b.burden - a.burden) || (a.distanceMeters - b.distanceMeters));
-      found[key] = options[0];
+      const candidate = options[0];
+      if (!found[key] || candidate.distanceMeters < found[key].distanceMeters || candidate.priority > found[key].priority) {
+        found[key] = candidate;
+      }
     }
+  };
+
+  // 1) exact object point, no tolerance
+  try {
+    const exact = await identifyNoisePoint(layers, geo, 0);
+    addCandidates(exact, 0, "Punkt exakt");
+    diagnostics.push({ radius: 0, method: "point", status: exact.length ? "loaded" : "not_found", count: exact.length });
+  } catch (error) {
+    diagnostics.push({ radius: 0, method: "point", status: errorStatus(error) });
+  }
+
+  // 2) documented GeoAdmin point-buffer logic: tolerance in px + 1 m/px scale.
+  // 3) envelope fallback at the same physical radius.
+  for (const radius of [25, 50, 100, 250]) {
+    let pointResults = [];
+    try {
+      pointResults = await identifyNoisePoint(layers, geo, radius);
+      addCandidates(pointResults, radius, `Punkt ±${radius} m`);
+      diagnostics.push({ radius, method: "point", status: pointResults.length ? "loaded" : "not_found", count: pointResults.length });
+    } catch (error) {
+      diagnostics.push({ radius, method: "point", status: errorStatus(error) });
+    }
+
+    const missingKeys = ["roadDay", "roadNight", "railDay", "railNight"].filter((key) => !found[key]);
+    if (missingKeys.length) {
+      try {
+        const envelopeResults = await identifyNoiseEnvelope(layers, geo, radius);
+        addCandidates(envelopeResults, radius, `Fläche ±${radius} m`);
+        diagnostics.push({ radius, method: "envelope", status: envelopeResults.length ? "loaded" : "not_found", count: envelopeResults.length });
+      } catch (error) {
+        diagnostics.push({ radius, method: "envelope", status: errorStatus(error) });
+      }
+    }
+
     if (found.roadDay && found.roadNight && found.railDay && found.railNight) break;
   }
+
   const all = Object.values(found);
-  if (!all.length) return null;
+  if (!all.length) return { noData: true, diagnostics };
   const strongest = [...all].sort((a, b) => (b.burden - a.burden) || (b.db - a.db))[0];
   const sources = [...new Set(all.map((item) => item.source))];
   return {
@@ -284,6 +346,7 @@ async function fetchNoiseBundle(geo) {
     strongest,
     burden: strongest?.burden ?? 0,
     source: sources.join(" + "),
+    diagnostics,
   };
 }
 
@@ -703,6 +766,10 @@ export default async function handler(req, res) {
 
     const nearestPublicTransportMeters = transitD.value;
     const noise = noiseD.value;
+    if (noise?.noData && noiseD?.diagnostic) {
+      noiseD.diagnostic.status = "not_found";
+      noiseD.diagnostic.detail = `GeoAdmin Lärmsuche ohne Treffer: ${noise.diagnostics?.map((d) => `${d.method}:${d.radius}m=${d.status}`).join(", ") || "keine Treffer"}`;
+    }
     const roadNoiseDayDb = noise?.roadDay?.db ?? null;
     const roadNoiseNightDb = noise?.roadNight?.db ?? null;
     const railNoiseDayDb = noise?.railDay?.db ?? null;
@@ -710,7 +777,7 @@ export default async function handler(req, res) {
     const roadNoiseDb = Math.max(roadNoiseDayDb || 0, roadNoiseNightDb || 0) || null;
     const railNoiseDb = Math.max(railNoiseDayDb || 0, railNoiseNightDb || 0) || null;
     const maxNoiseDb = Math.max(roadNoiseDb || 0, railNoiseDb || 0) || null;
-    const noiseBurdenPercent = noise?.burden ?? null;
+    const noiseBurdenPercent = noise?.noData ? null : (noise?.burden ?? null);
     const vacancy = vacancyD.value;
     const schoolOsmResult = osmSchoolD.value;
     const schoolMeters = officialSchoolD.value ?? schoolOsmResult?.meters ?? null;
