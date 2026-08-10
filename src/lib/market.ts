@@ -53,17 +53,24 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
 
   const roadDb = evidence?.roadNoiseDb ?? null;
   const railDb = evidence?.railNoiseDb ?? null;
-  const maxNoiseDb = Math.max(roadDb ?? -Infinity, railDb ?? -Infinity);
   const roadDist = evidence?.roadNoiseDistanceMeters ?? null;
   const railDist = evidence?.railNoiseDistanceMeters ?? null;
-  const strongestDistance = roadDb != null && railDb != null
-    ? (roadDb >= railDb ? roadDist : railDist)
-    : roadDb != null ? roadDist : railDist;
-  const rawNoiseScore = Number.isFinite(maxNoiseDb) ? noiseBaseScore(maxNoiseDb) : 0;
-  const noiseConf = Number.isFinite(maxNoiseDb) ? noiseConfidence(strongestDistance) : 0;
-  const adjustedNoiseScore = Number.isFinite(maxNoiseDb)
-    ? Math.round(50 + (rawNoiseScore - 50) * noiseConf)
-    : 0;
+
+  const sourceNoiseScore = (db: number | null, distance: number | null) => {
+    if (db == null) return null;
+    const base = noiseBaseScore(db);
+    const confidence = noiseConfidence(distance);
+    // A fallback raster cell farther away is weaker evidence of a negative
+    // impact at the property. Reduce the penalty toward 100, never the dB.
+    return Math.round(clamp(100 - (100 - base) * confidence));
+  };
+  const roadNoiseScore = sourceNoiseScore(roadDb, roadDist);
+  const railNoiseScore = sourceNoiseScore(railDb, railDist);
+  const availableNoiseScores = [roadNoiseScore, railNoiseScore].filter((value): value is number => value != null);
+  const adjustedNoiseScore = availableNoiseScores.length ? Math.min(...availableNoiseScores) : 0;
+  const noiseDetailParts: string[] = [];
+  if (roadDb != null) noiseDetailParts.push(`Strasse ${roadDb.toFixed(1)} dB${roadDist != null ? ` · ${Math.round(roadDist)} m · Einfluss ${Math.round(noiseConfidence(roadDist) * 100)}%` : ""}`);
+  if (railDb != null) noiseDetailParts.push(`Bahn ${railDb.toFixed(1)} dB${railDist != null ? ` · ${Math.round(railDist)} m · Einfluss ${Math.round(noiseConfidence(railDist) * 100)}%` : ""}`);
 
   const raw = [
     {
@@ -94,12 +101,8 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
       label: "Lärmbelastung",
       available: evidence ? roadDb !== null || railDb !== null : true,
       score: evidence ? adjustedNoiseScore : Math.round(clamp(100 - l.noiseLevel)),
-      detail: evidence && Number.isFinite(maxNoiseDb)
-        ? (() => {
-            const distLabel = strongestDistance != null ? ` · ${Math.round(strongestDistance)} m` : "";
-            const confLabel = strongestDistance != null ? ` · Aussagekraft ${Math.round(noiseConf * 100)}%` : "";
-            return `${maxNoiseDb.toFixed(1)} dB${distLabel}${confLabel}`;
-          })()
+      detail: evidence && noiseDetailParts.length
+        ? noiseDetailParts.join(" · ")
         : `${l.noiseLevel}/100 Belastung`,
     },
     {

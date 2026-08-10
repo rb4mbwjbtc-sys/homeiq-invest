@@ -89,6 +89,12 @@ export type OpenDataLocationReport = {
     noiseImpactPercent?: number | null;
     noiseStrongestType?: string | null;
     noiseStrongestPeriod?: string | null;
+    roadNoiseImpactPercent?: number | null;
+    railNoiseImpactPercent?: number | null;
+    roadNoiseSource?: string | null;
+    railNoiseSource?: string | null;
+    roadNoiseMethod?: string | null;
+    railNoiseMethod?: string | null;
     nearestPublicTransportMeters: number | null;
     nearestShoppingMeters: number | null;
     nearestSchoolMeters: number | null;

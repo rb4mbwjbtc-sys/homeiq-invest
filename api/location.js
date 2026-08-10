@@ -47,7 +47,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4200) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/5.0 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/5.1 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -67,7 +67,7 @@ async function fetchText(url, options = {}, timeoutMs = 3500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,application/geo+json,application/json,*/*",
-        "User-Agent": "HomeIQ-Invest/5.0 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/5.1 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -235,9 +235,10 @@ function parseWmsNoiseText(text, layerIds, distanceMeters, method) {
     if (!meta) continue;
     const quoted = `Layer '${layer}'`;
     const start = raw.indexOf(quoted);
-    if (start < 0) continue;
-    const next = raw.indexOf("Layer '", start + quoted.length);
-    const segment = raw.slice(start, next >= 0 ? next : raw.length);
+    const next = start >= 0 ? raw.indexOf("Layer '", start + quoted.length) : -1;
+    // GeoAdmin WMS does not always include a layer header in text/plain.
+    // If this request contains one layer only, the entire response belongs to it.
+    const segment = start >= 0 ? raw.slice(start, next >= 0 ? next : raw.length) : (layerIds.length === 1 ? raw : "");
     const db = parseNoiseDbFromText(segment);
     if (db == null) continue;
     candidates.push({
@@ -254,9 +255,6 @@ function parseWmsNoiseText(text, layerIds, distanceMeters, method) {
 }
 
 async function wmsNoiseAt(geo, layerIds, easting, northing, distanceMeters, method) {
-  // The BAFU road/rail noise layers are raster/WMTS layers and are not
-  // queryable through the GeoAdmin MapServer identify endpoint. WMS
-  // GetFeatureInfo is the supported route for querying the rendered raster.
   const half = 50;
   const params = new URLSearchParams({
     SERVICE: "WMS",
@@ -277,8 +275,15 @@ async function wmsNoiseAt(geo, layerIds, easting, northing, distanceMeters, meth
     FEATURE_COUNT: "20",
     LANG: "de",
   });
-  const text = await fetchText(`${GEOADMIN_WMS}?${params}`, {}, 2800);
+  const text = await fetchText(`${GEOADMIN_WMS}?${params}`, {}, 3000);
   return parseWmsNoiseText(text, layerIds, distanceMeters, method);
+}
+
+async function wmsSingleNoiseAt(geo, layer, easting, northing, distanceMeters, method) {
+  // Query every raster layer independently. This is intentional: road-noise
+  // responses can differ from railway responses and some WMS text/plain
+  // payloads omit the "Layer '…'" header when only one layer is queried.
+  return wmsNoiseAt(geo, [layer], easting, northing, distanceMeters, method);
 }
 
 function samplePointsAround(geo, radiusMeters) {
@@ -301,50 +306,50 @@ async function fetchBafuRasterNoise(geo) {
   const found = {};
   const diagnostics = [];
 
-  const accept = (candidates) => {
-    for (const key of ["roadDay", "roadNight", "railDay", "railNight"]) {
-      const options = candidates.filter((candidate) => candidate.key === key);
-      if (!options.length) continue;
-      options.sort((a, b) => (b.burden - a.burden) || (b.db - a.db) || (a.distanceMeters - b.distanceMeters));
-      const candidate = options[0];
-      if (!found[key] || candidate.distanceMeters < found[key].distanceMeters || candidate.burden > found[key].burden) found[key] = candidate;
+  const accept = (candidate) => {
+    if (!candidate?.key) return;
+    const current = found[candidate.key];
+    // Nearest raster evidence wins. At the same search distance, keep the
+    // higher dB value to remain conservative.
+    if (!current || candidate.distanceMeters < current.distanceMeters || (candidate.distanceMeters === current.distanceMeters && candidate.db > current.db)) {
+      found[candidate.key] = candidate;
     }
   };
 
-  // Exact object point first. In populated areas this should usually be enough.
-  try {
-    const exact = await wmsNoiseAt(geo, rasterLayers, geo.easting, geo.northing, 0, "WMS Objektpunkt");
-    accept(exact);
-    diagnostics.push({ radius: 0, method: "wms", status: exact.length ? "loaded" : "not_found", count: exact.length });
-  } catch (error) {
-    diagnostics.push({ radius: 0, method: "wms", status: errorStatus(error) });
-  }
-
-  // If one or more noise categories are missing, sample eight directions at
-  // increasing physical distances. One request queries all four raster layers.
-  for (const radius of [25, 50, 100, 250]) {
-    const missing = ["roadDay", "roadNight", "railDay", "railNight"].some((key) => !found[key]);
-    if (!missing) break;
-    const points = samplePointsAround(geo, radius);
-    const settled = await Promise.allSettled(points.map((point) => wmsNoiseAt(
-      geo,
-      rasterLayers,
-      point.easting,
-      point.northing,
-      point.distanceMeters,
-      `WMS Umgebung ${point.label}`,
+  const queryLayerAtPoints = async (layer, points, radius) => {
+    const meta = noiseKeyForLayer(layer);
+    const settled = await Promise.allSettled(points.map((point) => wmsSingleNoiseAt(
+      geo, layer, point.easting, point.northing, point.distanceMeters,
+      `${meta?.type || "Lärm"} ${meta?.period || ""} · ${point.label}`,
     )));
     let loaded = 0;
     let errors = 0;
     for (const result of settled) {
       if (result.status === "fulfilled") {
-        loaded += result.value.length;
-        accept(result.value);
-      } else {
-        errors += 1;
-      }
+        for (const candidate of result.value) { accept(candidate); loaded += 1; }
+      } else errors += 1;
     }
-    diagnostics.push({ radius, method: "wms-grid", status: loaded ? "loaded" : errors === settled.length ? "error" : "not_found", count: loaded });
+    diagnostics.push({
+      radius,
+      method: `wms-${meta?.key || layer}`,
+      status: loaded ? "loaded" : errors === settled.length ? "error" : "not_found",
+      count: loaded,
+    });
+  };
+
+  // Query all four official raster layers independently at the object point.
+  await Promise.all(rasterLayers.map((layer) => queryLayerAtPoints(layer, samplePointsAround(geo, 0), 0)));
+
+  // Only missing categories are expanded spatially. Existing road/rail values
+  // are frozen so a more distant, louder raster cell cannot replace a nearer one.
+  for (const radius of [25, 50, 100, 250]) {
+    const missingLayers = rasterLayers.filter((layer) => {
+      const meta = noiseKeyForLayer(layer);
+      return meta && !found[meta.key];
+    });
+    if (!missingLayers.length) break;
+    const points = samplePointsAround(geo, radius);
+    await Promise.all(missingLayers.map((layer) => queryLayerAtPoints(layer, points, radius)));
   }
   return { found, diagnostics };
 }
@@ -418,10 +423,24 @@ function noiseDistanceWeight(distanceMeters) {
   return 0;
 }
 
+function noiseBaseScore(db) {
+  if (db <= 45) return 100;
+  if (db <= 50) return 100 - (db - 45) * 2;
+  if (db <= 55) return 90 - (db - 50) * 3;
+  if (db <= 60) return 75 - (db - 55) * 4;
+  if (db <= 65) return 55 - (db - 60) * 5;
+  if (db <= 70) return 30 - (db - 65) * 4;
+  return 10;
+}
+
 function noiseBurden(db, distanceMeters) {
   if (db == null) return null;
-  const rawBurden = clamp((db - 35) * 2.1);
-  return Math.round(rawBurden * noiseDistanceWeight(distanceMeters));
+  // Distance reduces only the negative impact of fallback evidence. The dB
+  // measurement itself is never artificially reduced.
+  const baseScore = clamp(noiseBaseScore(db));
+  const confidence = noiseDistanceWeight(distanceMeters);
+  const effectiveScore = 100 - (100 - baseScore) * confidence;
+  return Math.round(clamp(100 - effectiveScore));
 }
 
 function noiseKeyForLayer(layer) {
@@ -471,10 +490,16 @@ async function fetchNoiseBundle(geo) {
   const all = Object.values(found);
   if (!all.length) return { noData: true, diagnostics };
   const strongest = [...all].sort((a, b) => (b.burden - a.burden) || (b.db - a.db))[0];
+  const roadItems = [found.roadDay, found.roadNight].filter(Boolean);
+  const railItems = [found.railDay, found.railNight].filter(Boolean);
+  const roadStrongest = [...roadItems].sort((a, b) => (b.burden - a.burden) || (b.db - a.db))[0] || null;
+  const railStrongest = [...railItems].sort((a, b) => (b.burden - a.burden) || (b.db - a.db))[0] || null;
   const sources = [...new Set(all.map((item) => item.source))];
   return {
     ...found,
     strongest,
+    roadStrongest,
+    railStrongest,
     burden: strongest?.burden ?? 0,
     source: sources.join(" + "),
     diagnostics,
@@ -1007,6 +1032,12 @@ export default async function handler(req, res) {
         noiseImpactPercent: noiseBurdenPercent,
         noiseStrongestType: noise?.strongest?.type ?? null,
         noiseStrongestPeriod: noise?.strongest?.period ?? null,
+        roadNoiseImpactPercent: noise?.roadStrongest?.burden ?? null,
+        railNoiseImpactPercent: noise?.railStrongest?.burden ?? null,
+        roadNoiseSource: noise?.roadStrongest?.source ?? null,
+        railNoiseSource: noise?.railStrongest?.source ?? null,
+        roadNoiseMethod: noise?.roadStrongest?.method ?? null,
+        railNoiseMethod: noise?.railStrongest?.method ?? null,
         nearestPublicTransportMeters,
         nearestShoppingMeters: shoppingMeters,
         nearestSchoolMeters: schoolMeters,
@@ -1037,7 +1068,7 @@ export default async function handler(req, res) {
         { name: "swisstopo / GeoAdmin", detail: "Amtliche Adresse, Gemeinde und Gebäudeverknüpfung" },
         { name: "Bundesamt für Statistik BFS", detail: "GWR und Leerwohnungsziffer; Gemeinde wird über die BFS-Nummer zugeordnet" },
         { name: "Bundesamt für Raumentwicklung ARE", detail: "ÖV-Güteklasse" },
-        { name: "BAFU / BAV via GeoAdmin", detail: "BAFU-Strassen-/Bahnlärm wird als Raster über den offiziellen GeoAdmin-WMS-GetFeatureInfo-Dienst abgefragt; BAV-Eisenbahn-Immissionen zusätzlich über GeoAdmin Identify. Suche am Objekt sowie 25/50/100/250 m, distanzgewichtet." },
+        { name: "BAFU / BAV via GeoAdmin", detail: "Strassen- und Bahnlärm werden getrennt für Tag/Nacht abgefragt. Jeder BAFU-Rasterlayer läuft unabhängig über GeoAdmin WMS GetFeatureInfo; BAV-Eisenbahn-Immissionen zusätzlich über GeoAdmin Identify. Suche am Objekt sowie 25/50/100/250 m. Entfernung reduziert nur den negativen Einfluss, nicht den dB-Wert." },
         { name: "OpenTransportData / transport.opendata.ch", detail: "Nächster ÖV-Servicepunkt" },
         { name: "opendata.swiss", detail: "Offizielle kantonale/kommunale Schul-, Betreuungs- und Leerstandsdaten, sofern maschinenlesbar verfügbar" },
         { name: "OpenStreetMap", detail: "Einkauf, Schule/Betreuung und Autobahnanschlüsse über zwei unabhängige OSM-Zugriffswege (Photon und Overpass), mit gestaffelten Radien" },
@@ -1047,6 +1078,11 @@ export default async function handler(req, res) {
     memoryCache.set(cacheKey, { at: Date.now(), value: body });
     return json(res, 200, body);
   } catch (error) {
+    // If this serverless instance still has an older successful result, prefer a
+    // transparent stale result over making the user lose all already-known data.
+    if (cached && Date.now() - cached.at < 7 * 24 * 60 * 60 * 1000) {
+      return json(res, 200, { ...cached.value, cache: { stale: true, reason: error instanceof Error ? error.message : "Quellenfehler" } });
+    }
     return json(res, 502, { error: error instanceof Error ? error.message : "Standortdaten konnten nicht geladen werden." });
   }
 }

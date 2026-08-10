@@ -214,7 +214,9 @@ export function NewAnalysis() {
       setMarketValueGenerated(null);
       setMarketRentGenerated(null);
     } catch (error) {
-      setLocationLoaded(false);
+      // Bei einem erneuten Laden bleiben bereits erfolgreich geladene Daten
+      // sichtbar. Ein temporärer Quellenfehler löscht keine gute Analyse.
+      setLocationLoaded(Boolean(form.openDataLocation));
       setLocationError(error instanceof Error ? error.message : "Standortdaten konnten nicht geladen werden.");
     } finally {
       setLoadingLocation(false);
@@ -280,7 +282,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.0</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.1</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -666,9 +668,8 @@ export function NewAnalysis() {
                   const road = [e.roadNoiseDayDb != null ? `T ${e.roadNoiseDayDb}` : "", e.roadNoiseNightDb != null ? `N ${e.roadNoiseNightDb}` : ""].filter(Boolean).join("/");
                   const rail = [e.railNoiseDayDb != null ? `T ${e.railNoiseDayDb}` : "", e.railNoiseNightDb != null ? `N ${e.railNoiseNightDb}` : ""].filter(Boolean).join("/");
                   const parts = [e.noiseSource];
-                  if (road) parts.push(`Strasse ${road} dB${e.roadNoiseDistanceMeters != null ? ` · ${Math.round(e.roadNoiseDistanceMeters)} m` : ""}`);
-                  if (rail) parts.push(`Bahn ${rail} dB${e.railNoiseDistanceMeters != null ? ` · ${Math.round(e.railNoiseDistanceMeters)} m` : ""}`);
-                  if (e.noiseImpactPercent != null) parts.push(`Einfluss ${e.noiseImpactPercent}%`);
+                  if (road) parts.push(`Strasse ${road} dB${e.roadNoiseDistanceMeters != null ? ` · ${Math.round(e.roadNoiseDistanceMeters)} m` : ""}${e.roadNoiseImpactPercent != null ? ` · Einfluss ${e.roadNoiseImpactPercent}%` : ""}`);
+                  if (rail) parts.push(`Bahn ${rail} dB${e.railNoiseDistanceMeters != null ? ` · ${Math.round(e.railNoiseDistanceMeters)} m` : ""}${e.railNoiseImpactPercent != null ? ` · Einfluss ${e.railNoiseImpactPercent}%` : ""}`);
                   return parts.join(" · ");
                 })()}</small></div>
                 <div><span>Gebäude</span><strong>{form.openDataLocation.building?.constructionYear ? `Baujahr ${form.openDataLocation.building.constructionYear}` : form.openDataLocation.building?.egid ? `EGID ${form.openDataLocation.building.egid}` : "nicht verfügbar"}</strong></div>

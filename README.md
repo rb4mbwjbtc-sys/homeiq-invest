@@ -1,12 +1,16 @@
-# HomeIQ Independent V5.0 – Calibrated Location Scoring
+# HomeIQ Independent V5.1 – Noise Split & Reliability
 
-V5.0 baut auf V4.9 auf. Die funktionierenden Datenquellen bleiben unverändert. Neu kalibriert HomeIQ die Lagebewertung fachlich strenger und stabilisiert die OSM-Fallbacks.
+V5.1 baut auf V5.0 auf. Alle bereits funktionierenden Lagequellen bleiben unverändert.
 
-## Neu
-- Distanzkurven getrennt für ÖV, Einkauf, Schule/Betreuung und Autobahn
-- Autobahnanschlüsse in 7–10 km Entfernung erhalten keine nahezu maximale Bewertung mehr
-- Lärm wird aus dB-Kategorie und räumlicher Aussagekraft getrennt bewertet
-- entfernte Lärmraster reduzieren die Verlässlichkeit, nicht den dB-Wert selbst
-- Lage-Rating zeigt bei <40 % Datenabdeckung explizit eingeschränkte Aussagekraft
-- Photon und Overpass erhalten interne Retries; technische Ausfälle werden nicht mit einem echten „kein Treffer“ gleichgesetzt
-- alle in V4.9 funktionierenden Schweizer Datenconnectoren bleiben bestehen
+Neu in V5.1:
+
+- Strassen- und Bahnlärm werden technisch getrennt abgefragt und gespeichert.
+- BAFU-WMS-Layer Strasse Tag/Nacht und Bahn Tag/Nacht werden einzeln abgefragt, damit unterschiedliche WMS-Antwortformate keinen Layer verschlucken.
+- BAV-Eisenbahnimmissionen bleiben als zusätzliche offizielle Bahnquelle aktiv.
+- Für Lärm gewinnt der nächstgelegene belastbare Rastertreffer; ein weiter entfernter, lauterer Wert ersetzt keinen näheren Wert.
+- Entfernung reduziert nur den negativen Einfluss eines Fallback-Treffers, niemals den gemessenen dB-Wert.
+- Die Lageanalyse zeigt Strasse und Bahn mit eigener Distanz und eigenem Einfluss transparent an.
+- Bei einem temporären Fehler während "Neu laden" bleiben bereits geladene Standortdaten sichtbar.
+- Ein vorhandener serverseitiger Cache kann bei einem temporären Quellenfehler als transparenter Stale-Fallback verwendet werden.
+
+Unverändert bleiben insbesondere ÖV, Einkauf, Schule/Betreuung, Autobahnanschluss, Leerstand, GWR/Gebäude, Kartenanzeige sowie die in V5.0 kalibrierten Distanzkurven.
