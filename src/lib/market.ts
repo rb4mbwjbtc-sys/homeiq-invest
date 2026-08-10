@@ -1,7 +1,44 @@
 import type { AnalysisInput, LocationAnalysis, MarketAnalysis, RentalUnit, UnitMarketRentResult } from "../types";
 
 const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
-const distanceScore = (minutes: number, ideal: number, limit: number) => clamp(100 - Math.max(0, minutes - ideal) * (100 / Math.max(limit - ideal, 1)));
+
+function piecewiseScore(value: number, points: Array<[number, number]>): number {
+  const sorted = [...points].sort((a, b) => a[0] - b[0]);
+  if (value <= sorted[0][0]) return sorted[0][1];
+  for (let i = 1; i < sorted.length; i += 1) {
+    const [x1, y1] = sorted[i - 1];
+    const [x2, y2] = sorted[i];
+    if (value <= x2) {
+      const t = (value - x1) / Math.max(x2 - x1, 1e-9);
+      return y1 + (y2 - y1) * t;
+    }
+  }
+  return sorted[sorted.length - 1][1];
+}
+
+const distanceMetersScore = (meters: number | null | undefined, type: "transit" | "shopping" | "school" | "motorway") => {
+  if (meters == null) return 0;
+  const curves: Record<typeof type, Array<[number, number]>> = {
+    transit: [[150,100],[300,95],[500,90],[750,82],[1000,75],[1500,62],[2500,45],[4000,25],[6000,10]],
+    shopping: [[300,100],[500,95],[800,85],[1200,72],[2000,55],[3000,40],[5000,20],[10000,5]],
+    school: [[300,100],[500,95],[800,85],[1200,75],[2000,60],[3000,45],[5000,25],[10000,10]],
+    motorway: [[1000,100],[2000,90],[3000,80],[5000,65],[7000,50],[10000,35],[15000,20],[25000,10]],
+  };
+  return Math.round(clamp(piecewiseScore(meters, curves[type])));
+};
+
+function noiseBaseScore(db: number): number {
+  return Math.round(clamp(piecewiseScore(db, [[40,100],[45,100],[50,90],[55,75],[60,55],[65,30],[70,10]])));
+}
+
+function noiseConfidence(distanceMeters: number | null | undefined): number {
+  if (distanceMeters == null) return 1;
+  if (distanceMeters <= 25) return 1;
+  if (distanceMeters <= 50) return 0.9;
+  if (distanceMeters <= 100) return 0.7;
+  if (distanceMeters <= 250) return 0.4;
+  return 0;
+}
 
 export function analyseLocation(input: AnalysisInput): LocationAnalysis {
   const l = input.location;
@@ -14,44 +51,54 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
     return mode === "drive" ? `${fallbackMinutes} Min. entfernt` : `${fallbackMinutes} Min. zu Fuss`;
   };
 
+  const roadDb = evidence?.roadNoiseDb ?? null;
+  const railDb = evidence?.railNoiseDb ?? null;
+  const maxNoiseDb = Math.max(roadDb ?? -Infinity, railDb ?? -Infinity);
+  const roadDist = evidence?.roadNoiseDistanceMeters ?? null;
+  const railDist = evidence?.railNoiseDistanceMeters ?? null;
+  const strongestDistance = roadDb != null && railDb != null
+    ? (roadDb >= railDb ? roadDist : railDist)
+    : roadDb != null ? roadDist : railDist;
+  const rawNoiseScore = Number.isFinite(maxNoiseDb) ? noiseBaseScore(maxNoiseDb) : 0;
+  const noiseConf = Number.isFinite(maxNoiseDb) ? noiseConfidence(strongestDistance) : 0;
+  const adjustedNoiseScore = Number.isFinite(maxNoiseDb)
+    ? Math.round(50 + (rawNoiseScore - 50) * noiseConf)
+    : 0;
+
   const raw = [
     {
       label: "ÖV-Anbindung",
       available: evidence ? evidence.nearestPublicTransportMeters !== null || !!evidence.transitClass : true,
-      score: Math.round(distanceScore(l.publicTransportMinutes, 3, 25)),
+      score: evidence?.nearestPublicTransportMeters != null ? distanceMetersScore(evidence.nearestPublicTransportMeters, "transit") : Math.round(clamp(l.publicTransportMinutes > 0 ? 100 - l.publicTransportMinutes * 4 : 50)),
       detail: distanceLabel(evidence?.nearestPublicTransportMeters, l.publicTransportMinutes),
     },
     {
       label: "Einkauf",
       available: evidence ? evidence.nearestShoppingMeters !== null : true,
-      score: Math.round(distanceScore(l.shoppingMinutes, 5, 35)),
+      score: evidence?.nearestShoppingMeters != null ? distanceMetersScore(evidence.nearestShoppingMeters, "shopping") : Math.round(clamp(l.shoppingMinutes > 0 ? 100 - l.shoppingMinutes * 3 : 50)),
       detail: distanceLabel(evidence?.nearestShoppingMeters, l.shoppingMinutes),
     },
     {
       label: "Schule & Betreuung",
       available: evidence ? evidence.nearestSchoolMeters !== null : true,
-      score: Math.round(distanceScore(l.schoolMinutes, 8, 40)),
+      score: evidence?.nearestSchoolMeters != null ? distanceMetersScore(evidence.nearestSchoolMeters, "school") : Math.round(clamp(l.schoolMinutes > 0 ? 100 - l.schoolMinutes * 2.5 : 50)),
       detail: distanceLabel(evidence?.nearestSchoolMeters, l.schoolMinutes),
     },
     {
       label: "Verkehrsanbindung",
       available: evidence ? evidence.nearestMotorwayJunctionMeters !== null : true,
-      score: Math.round(distanceScore(l.motorwayMinutes, 8, 55)),
+      score: evidence?.nearestMotorwayJunctionMeters != null ? distanceMetersScore(evidence.nearestMotorwayJunctionMeters, "motorway") : Math.round(clamp(l.motorwayMinutes > 0 ? 100 - l.motorwayMinutes * 2 : 50)),
       detail: distanceLabel(evidence?.nearestMotorwayJunctionMeters, l.motorwayMinutes, "drive"),
     },
     {
       label: "Lärmbelastung",
-      available: evidence ? evidence.roadNoiseDb !== null || evidence.railNoiseDb !== null : true,
-      score: Math.round(clamp(110 - l.noiseLevel)),
-      detail: evidence && (evidence.roadNoiseDb !== null || evidence.railNoiseDb !== null)
+      available: evidence ? roadDb !== null || railDb !== null : true,
+      score: evidence ? adjustedNoiseScore : Math.round(clamp(100 - l.noiseLevel)),
+      detail: evidence && Number.isFinite(maxNoiseDb)
         ? (() => {
-            const db = Math.max(evidence.roadNoiseDb || 0, evidence.railNoiseDb || 0);
-            const roadDist = evidence.roadNoiseDistanceMeters ?? Infinity;
-            const railDist = evidence.railNoiseDistanceMeters ?? Infinity;
-            const dist = Math.min(roadDist, railDist);
-            const distLabel = Number.isFinite(dist) ? ` · ${Math.round(dist)} m` : "";
-            const impact = evidence.noiseImpactPercent != null ? ` · Einfluss ${evidence.noiseImpactPercent}%` : "";
-            return `${db} dB${distLabel}${impact}`;
+            const distLabel = strongestDistance != null ? ` · ${Math.round(strongestDistance)} m` : "";
+            const confLabel = strongestDistance != null ? ` · Aussagekraft ${Math.round(noiseConf * 100)}%` : "";
+            return `${maxNoiseDb.toFixed(1)} dB${distLabel}${confLabel}`;
           })()
         : `${l.noiseLevel}/100 Belastung`,
     },
@@ -69,8 +116,6 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
     },
     {
       label: "Mikrolage",
-      // Mikrolage darf bei Open-Data-Analysen nicht als scheinbar gemessener Wert erscheinen,
-      // solange sie nicht aus ausreichend vielen realen Teilfaktoren abgeleitet werden kann.
       available: evidence ? [
         evidence.nearestPublicTransportMeters,
         evidence.nearestShoppingMeters,
@@ -81,12 +126,11 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
       detail: `${l.microLocation}/100 Qualität`,
     },
   ];
+
   const weights = [0.16, 0.10, 0.08, 0.08, 0.14, 0.18, 0.14, 0.12];
   const availableWeight = raw.reduce((sum, factor, index) => sum + (factor.available ? weights[index] : 0), 0);
   const weightedScore = raw.reduce((sum, factor, index) => sum + (factor.available ? factor.score * weights[index] : 0), 0);
   const observedScore = availableWeight > 0 ? weightedScore / availableWeight : 50;
-  // Bei geringer Datenabdeckung darf ein einzelner guter Faktor (z.B. ÖV) nicht zu 100/100 Lage führen.
-  // Wir ziehen die Aussage kontrolliert Richtung neutral (50), bis genügend echte Faktoren vorhanden sind.
   const confidence = clamp(availableWeight, 0, 1);
   const score = Math.round(observedScore * confidence + 50 * (1 - confidence));
   const factors = raw.map((factor) => ({
@@ -98,7 +142,8 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
   const dataCoverage = Math.round(availableWeight * 100);
   const strengths = factors.filter((factor) => factor.score >= 75 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
   const risks = factors.filter((factor) => factor.score > 0 && factor.score < 50 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
-  const rating = score >= 80 ? "Sehr gute Lage" : score >= 65 ? "Gute Lage" : score >= 50 ? "Durchschnittliche Lage" : "Schwache Lage";
+  const baseRating = score >= 80 ? "Sehr gute Lage" : score >= 65 ? "Gute Lage" : score >= 50 ? "Durchschnittliche Lage" : "Schwache Lage";
+  const rating = dataCoverage < 40 ? "Lagebewertung eingeschränkt" : baseRating;
   return { score, rating, factors, strengths, risks, dataCoverage, availableFactors, totalFactors: raw.length };
 }
 

@@ -47,7 +47,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4200) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/4.9 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/5.0 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -67,7 +67,7 @@ async function fetchText(url, options = {}, timeoutMs = 3500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,application/geo+json,application/json,*/*",
-        "User-Agent": "HomeIQ-Invest/4.9 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/5.0 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -606,17 +606,39 @@ async function photonNearestByTags(geo, tags, radiusKm, timeoutMs = 5200) {
   return Number.isFinite(nearest) ? Math.round(nearest) : null;
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function retryNullable(fn, attempts = 2, delayMs = 180) {
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const value = await fn();
+      if (value != null) return { value, hadSuccessfulRequest: true, lastError: null };
+      if (attempt < attempts - 1) await sleep(delayMs * (attempt + 1));
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts - 1) await sleep(delayMs * (attempt + 1));
+    }
+  }
+  return { value: null, hadSuccessfulRequest: lastError == null, lastError };
+}
+
 async function nearestWithOsmFallback(geo, overpassBuilder, photonTags, radiiKm) {
+  let technicalFailures = 0;
+  let successfulEmptyRequests = 0;
   for (const radiusKm of radiiKm) {
-    // Fast indexed OSM geocoder first; public Overpass remains a second independent OSM path.
-    try {
-      const photon = await photonNearestByTags(geo, photonTags, radiusKm, 5200);
-      if (photon != null) return { meters: photon, source: "OpenStreetMap / Photon" };
-    } catch {}
-    try {
-      const overpass = await overpassNearest(geo, withCoords(overpassBuilder, geo), radiusKm * 1000, 7200);
-      if (overpass != null) return { meters: overpass, source: "OpenStreetMap / Overpass" };
-    } catch {}
+    const photon = await retryNullable(() => photonNearestByTags(geo, photonTags, radiusKm, 5200), 2, 160);
+    if (photon.value != null) return { meters: photon.value, source: "OpenStreetMap / Photon" };
+    if (photon.hadSuccessfulRequest) successfulEmptyRequests += 1; else technicalFailures += 1;
+
+    const overpass = await retryNullable(() => overpassNearest(geo, withCoords(overpassBuilder, geo), radiusKm * 1000, 7200), 2, 220);
+    if (overpass.value != null) return { meters: overpass.value, source: "OpenStreetMap / Overpass" };
+    if (overpass.hadSuccessfulRequest) successfulEmptyRequests += 1; else technicalFailures += 1;
+  }
+  if (technicalFailures > 0 && successfulEmptyRequests === 0) {
+    const err = new Error("Alle OSM-Zugriffswege waren technisch nicht verfügbar.");
+    err.name = "OsmSourcesUnavailable";
+    throw err;
   }
   return null;
 }
