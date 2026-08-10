@@ -678,6 +678,161 @@ const schoolQuery = (r) => `
   nwr(around:${r},{{LAT}},{{LON}})[amenity=college];`;
 const motorwayQuery = (r) => `nwr(around:${r},{{LAT}},{{LON}})[highway=motorway_junction];`;
 
+const microLocationQuery = (r) => `
+  nwr(around:${r},{{LAT}},{{LON}})[leisure~"park|garden|playground|sports_centre|pitch|recreation_ground|swimming_pool"];
+  nwr(around:${r},{{LAT}},{{LON}})[natural~"wood|water|heath|scrub"];
+  nwr(around:${r},{{LAT}},{{LON}})[landuse~"forest|grass|meadow|recreation_ground|village_green|residential|industrial|commercial"];
+  nwr(around:${r},{{LAT}},{{LON}})[waterway~"river|stream|canal"];
+  nwr(around:${r},{{LAT}},{{LON}})[amenity~"restaurant|cafe|pharmacy|library|community_centre|doctors|clinic"];
+  nwr(around:${r},{{LAT}},{{LON}})[shop=bakery];
+  nwr(around:${r},{{LAT}},{{LON}})[highway~"motorway|trunk|primary"];`;
+
+function elementPoint(element) {
+  const lat = Number(element?.lat ?? element?.center?.lat);
+  const lon = Number(element?.lon ?? element?.center?.lon);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+}
+
+async function overpassElements(geo, queryBody, radiusMeters, timeoutMs = 7600) {
+  const query = `[out:json][timeout:6];(${queryBody(radiusMeters)});out center tags qt 6000;`;
+  const requests = OVERPASS_ENDPOINTS.map((endpoint) => fetchJson(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body: new URLSearchParams({ data: query }).toString(),
+  }, timeoutMs));
+  const settled = await Promise.allSettled(requests);
+  const dedup = new Map();
+  let successful = 0;
+  for (const entry of settled) {
+    if (entry.status !== "fulfilled") continue;
+    successful += 1;
+    for (const element of entry.value.elements || []) {
+      const point = elementPoint(element);
+      if (!point) continue;
+      const distance = haversine({ lat: geo.lat, lon: geo.lon }, point);
+      if (distance > radiusMeters) continue;
+      const key = `${element.type || "x"}:${element.id || `${point.lat}:${point.lon}`}`;
+      if (!dedup.has(key) || distance < dedup.get(key).distanceMeters) {
+        dedup.set(key, { ...element, distanceMeters: Math.round(distance) });
+      }
+    }
+  }
+  if (!successful) {
+    const error = new Error("OpenStreetMap-Mikrolage konnte technisch nicht geladen werden.");
+    error.name = "OsmMicroLocationUnavailable";
+    throw error;
+  }
+  return [...dedup.values()];
+}
+
+function nearestDistance(items) {
+  const values = items.map((item) => Number(item.distanceMeters)).filter(Number.isFinite);
+  return values.length ? Math.min(...values) : null;
+}
+
+function countWithin(items, meters) {
+  return items.filter((item) => Number(item.distanceMeters) <= meters).length;
+}
+
+function curveScore(distance, points, fallback) {
+  if (distance == null) return fallback;
+  for (const [limit, score] of points) if (distance <= limit) return score;
+  return points[points.length - 1][1];
+}
+
+function microLocationFromElements(elements) {
+  const green = [];
+  const water = [];
+  const family = [];
+  const residential = [];
+  const industrial = [];
+  const majorRoad = [];
+  const urban = [];
+
+  for (const element of elements) {
+    const tags = element.tags || {};
+    const leisure = tags.leisure || "";
+    const natural = tags.natural || "";
+    const landuse = tags.landuse || "";
+    const waterway = tags.waterway || "";
+    const amenity = tags.amenity || "";
+    const shop = tags.shop || "";
+    const highway = tags.highway || "";
+
+    if (/park|garden|recreation_ground/.test(leisure) || /wood|heath|scrub/.test(natural) || /forest|grass|meadow|recreation_ground|village_green/.test(landuse)) green.push(element);
+    if (natural === "water" || /river|stream|canal/.test(waterway)) water.push(element);
+    if (/playground|sports_centre|pitch|swimming_pool|recreation_ground/.test(leisure)) family.push(element);
+    if (landuse === "residential") residential.push(element);
+    if (/industrial|commercial/.test(landuse)) industrial.push(element);
+    if (/motorway|trunk|primary/.test(highway)) majorRoad.push(element);
+    if (/restaurant|cafe|pharmacy|library|community_centre|doctors|clinic/.test(amenity) || shop === "bakery") urban.push(element);
+  }
+
+  const greenDistance = nearestDistance(green);
+  const waterDistance = nearestDistance(water);
+  const familyDistance = nearestDistance(family);
+  const residentialDistance = nearestDistance(residential);
+  const industrialDistance = nearestDistance(industrial);
+  const majorRoadDistance = nearestDistance(majorRoad);
+  const urbanDistance = nearestDistance(urban);
+
+  const greenBase = curveScore(greenDistance, [[250,100],[500,90],[1000,70],[2000,40]], 45);
+  const greenDensityBonus = Math.min(15, countWithin(green, 1000) * 3);
+  const greenScore = clamp(greenBase + greenDensityBonus);
+
+  // Gewässer sind ein Bonus, kein Muss. Ohne Gewässer bleibt der Faktor neutral.
+  const waterScore = curveScore(waterDistance, [[300,100],[750,85],[1500,65],[2000,50]], 65);
+
+  const familyBase = curveScore(familyDistance, [[250,100],[500,90],[1000,75],[2000,55]], 45);
+  const familyDensityBonus = Math.min(12, countWithin(family, 1000) * 3);
+  const familyScore = clamp(familyBase + familyDensityBonus);
+
+  let residentialScore = 70;
+  if (residentialDistance != null) residentialScore += residentialDistance <= 500 ? 12 : residentialDistance <= 1000 ? 6 : 2;
+  if (industrialDistance != null) residentialScore -= industrialDistance <= 250 ? 30 : industrialDistance <= 500 ? 20 : industrialDistance <= 1000 ? 10 : 4;
+  if (majorRoadDistance != null) residentialScore -= majorRoadDistance <= 100 ? 20 : majorRoadDistance <= 250 ? 12 : majorRoadDistance <= 500 ? 6 : 2;
+  residentialScore = clamp(residentialScore);
+
+  let urbanScore = 45;
+  if (urbanDistance != null) urbanScore += urbanDistance <= 250 ? 20 : urbanDistance <= 500 ? 15 : urbanDistance <= 1000 ? 10 : 4;
+  urbanScore += Math.min(25, countWithin(urban, 1000) * 4);
+  urbanScore = clamp(urbanScore);
+
+  const score = Math.round(clamp(
+    greenScore * 0.30 +
+    waterScore * 0.15 +
+    familyScore * 0.20 +
+    residentialScore * 0.25 +
+    urbanScore * 0.10
+  ));
+
+  const summaryParts = [];
+  if (greenDistance != null) summaryParts.push(`Grün/Natur ${Math.round(greenDistance)} m`);
+  if (waterDistance != null) summaryParts.push(`Gewässer ${Math.round(waterDistance)} m`);
+  if (familyDistance != null) summaryParts.push(`Freizeit ${Math.round(familyDistance)} m`);
+  if (industrialDistance != null && industrialDistance <= 1000) summaryParts.push(`Gewerbe/Industrie ${Math.round(industrialDistance)} m`);
+  else if (residentialDistance != null && residentialDistance <= 1000) summaryParts.push("Wohngebiet im Umfeld");
+  if (majorRoadDistance != null && majorRoadDistance <= 500) summaryParts.push(`Hauptverkehrsachse ${Math.round(majorRoadDistance)} m`);
+
+  return {
+    score,
+    summary: summaryParts.slice(0, 4).join(" · ") || "Unmittelbares Wohnumfeld analysiert",
+    components: {
+      green: { score: Math.round(greenScore), nearestMeters: greenDistance, count500m: countWithin(green, 500), count1000m: countWithin(green, 1000) },
+      water: { score: Math.round(waterScore), nearestMeters: waterDistance, count1000m: countWithin(water, 1000) },
+      family: { score: Math.round(familyScore), nearestMeters: familyDistance, count500m: countWithin(family, 500), count1000m: countWithin(family, 1000) },
+      residential: { score: Math.round(residentialScore), nearestResidentialMeters: residentialDistance, nearestIndustrialMeters: industrialDistance, nearestMajorRoadMeters: majorRoadDistance },
+      urbanity: { score: Math.round(urbanScore), nearestMeters: urbanDistance, count1000m: countWithin(urban, 1000) },
+    },
+  };
+}
+
+async function fetchMicroLocationProfile(geo) {
+  const elements = await overpassElements(geo, withCoords(microLocationQuery, geo), 2000, 7600);
+  if (!elements.length) return null;
+  return microLocationFromElements(elements);
+}
+
 function withCoords(builder, geo) {
   return (radius) => builder(radius).replaceAll("{{LAT}}", String(geo.lat)).replaceAll("{{LON}}", String(geo.lon));
 }
@@ -928,7 +1083,7 @@ export default async function handler(req, res) {
     const municipalityBfs = gwr?.municipalityBfs || municipalityParsed.municipalityBfs;
     const transitClass = parseTransitClass(layerMap[LAYERS.transitClass]);
 
-    const [transitD, noiseD, vacancyD, officialSchoolD, shoppingD, osmSchoolD, motorwayD] = await Promise.all([
+    const [transitD, noiseD, vacancyD, officialSchoolD, shoppingD, osmSchoolD, motorwayD, microD] = await Promise.all([
       runDiagnostic("Nächster ÖV-Punkt", "OpenTransportData", () => fetchNearestTransit(geo)),
       runDiagnostic("Lärm Strasse/Bahn Tag+Nacht", "BAFU / BAV via GeoAdmin", () => fetchNoiseBundle(geo)),
       runDiagnostic("Leerwohnungsziffer", "BFS / opendata.swiss", () => fetchVacancyRate(municipalityBfs, municipalityName)),
@@ -940,6 +1095,7 @@ export default async function handler(req, res) {
         "amenity:school", "amenity:kindergarten", "amenity:childcare", "amenity:college"
       ], [3, 8, 20])),
       runDiagnostic("Autobahnanschluss", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, motorwayQuery, ["highway:motorway_junction"], [10, 25, 50])),
+      runDiagnostic("Mikrolage", "OpenStreetMap / Overpass", () => fetchMicroLocationProfile(geo)),
     ]);
 
     const nearestPublicTransportMeters = transitD.value;
@@ -973,13 +1129,11 @@ export default async function handler(req, res) {
 
     const transitClassScore = { A: 95, B: 82, C: 68, D: 54 }[transitClass] || null;
     const vacancyRiskForScore = actual.vacancyRisk ?? 50;
-    const ptForScore = actual.publicTransportMinutes ?? (transitClass ? { A: 3, B: 6, C: 10, D: 15 }[transitClass] : 12);
-    const shopForScore = actual.shoppingMinutes ?? 12;
-    const schoolForScore = actual.schoolMinutes ?? 15;
-    const noiseForScore = actual.noiseLevel ?? 50;
     const municipalityDemand = Math.round(clamp(100 - vacancyRiskForScore * 0.78 + (transitClassScore ? (transitClassScore - 50) * 0.22 : 0)));
-    const accessibility = clamp(100 - ptForScore * 3 - shopForScore * 1.2 - schoolForScore * 0.8);
-    const microLocation = Math.round(clamp(accessibility * 0.55 + (100 - noiseForScore) * 0.25 + municipalityDemand * 0.20));
+    // V5.2: Mikrolage ist bewusst unabhängig von ÖV, Einkauf, Schule, Lärm und Leerstand.
+    // Sie beschreibt ausschliesslich das unmittelbare Wohnumfeld anhand von OSM-Umgebungsdaten.
+    const microProfile = microD.value;
+    const microLocation = microProfile?.score ?? 50;
 
     const metrics = {
       publicTransportMinutes: actual.publicTransportMinutes ?? 12,
@@ -1011,6 +1165,7 @@ export default async function handler(req, res) {
       shoppingD.diagnostic,
       osmSchoolD.diagnostic,
       motorwayD.diagnostic,
+      microD.diagnostic,
     ];
 
     const body = {
@@ -1042,6 +1197,9 @@ export default async function handler(req, res) {
         nearestShoppingMeters: shoppingMeters,
         nearestSchoolMeters: schoolMeters,
         nearestMotorwayJunctionMeters: motorwayMeters,
+        microLocationAvailable: Boolean(microProfile),
+        microLocationSummary: microProfile?.summary ?? null,
+        microLocationProfile: microProfile ?? null,
         searchRadiusKm: Math.max(10, radiusBucket(shoppingMeters, [1, 2.5, 5, 10, 15, 20]) || 0, radiusBucket(schoolMeters, [1, 2.5, 5, 10, 15, 20]) || 0, radiusBucket(motorwayMeters, [5, 10, 20, 35, 50]) || 0),
         categoryRadiusKm: {
           transit: nearestPublicTransportMeters == null ? null : Math.max(1, Math.ceil(nearestPublicTransportMeters / 1000)),
@@ -1071,7 +1229,7 @@ export default async function handler(req, res) {
         { name: "BAFU / BAV via GeoAdmin", detail: "Strassen- und Bahnlärm werden getrennt für Tag/Nacht abgefragt. Jeder BAFU-Rasterlayer läuft unabhängig über GeoAdmin WMS GetFeatureInfo; BAV-Eisenbahn-Immissionen zusätzlich über GeoAdmin Identify. Suche am Objekt sowie 25/50/100/250 m. Entfernung reduziert nur den negativen Einfluss, nicht den dB-Wert." },
         { name: "OpenTransportData / transport.opendata.ch", detail: "Nächster ÖV-Servicepunkt" },
         { name: "opendata.swiss", detail: "Offizielle kantonale/kommunale Schul-, Betreuungs- und Leerstandsdaten, sofern maschinenlesbar verfügbar" },
-        { name: "OpenStreetMap", detail: "Einkauf, Schule/Betreuung und Autobahnanschlüsse über zwei unabhängige OSM-Zugriffswege (Photon und Overpass), mit gestaffelten Radien" },
+        { name: "OpenStreetMap", detail: "Einkauf, Schule/Betreuung und Autobahnanschlüsse über Photon/Overpass. Mikrolage zusätzlich aus Grün/Natur, Gewässern, Freizeit, Wohnumfeld und lokalen Dienstleistungen im Umkreis bis 2 km." },
       ],
     };
 

@@ -119,14 +119,14 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
     },
     {
       label: "Mikrolage",
-      available: evidence ? [
+      available: evidence ? (evidence.microLocationAvailable ?? [
         evidence.nearestPublicTransportMeters,
         evidence.nearestShoppingMeters,
         evidence.nearestSchoolMeters,
         evidence.nearestMotorwayJunctionMeters,
-      ].filter((value) => value !== null).length >= 3 : true,
+      ].filter((value) => value !== null).length >= 3) : true,
       score: Math.round(clamp(l.microLocation)),
-      detail: `${l.microLocation}/100 Qualität`,
+      detail: evidence?.microLocationSummary || `${l.microLocation}/100 Wohnumfeld`,
     },
   ];
 

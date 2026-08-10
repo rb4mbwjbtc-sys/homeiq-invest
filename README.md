@@ -1,16 +1,16 @@
-# HomeIQ Independent V5.1 – Noise Split & Reliability
+# HomeIQ Independent V5.2 – OSM Micro-Location Environment
 
-V5.1 baut auf V5.0 auf. Alle bereits funktionierenden Lagequellen bleiben unverändert.
+V5.2 baut auf V5.1 auf. Alle bereits funktionierenden Standortquellen (Adresse/GWR, ÖV, Einkauf, Schule/Betreuung, Autobahn, Leerstand und Lärm) bleiben unverändert.
 
-Neu in V5.1:
+Neu in V5.2:
 
-- Strassen- und Bahnlärm werden technisch getrennt abgefragt und gespeichert.
-- BAFU-WMS-Layer Strasse Tag/Nacht und Bahn Tag/Nacht werden einzeln abgefragt, damit unterschiedliche WMS-Antwortformate keinen Layer verschlucken.
-- BAV-Eisenbahnimmissionen bleiben als zusätzliche offizielle Bahnquelle aktiv.
-- Für Lärm gewinnt der nächstgelegene belastbare Rastertreffer; ein weiter entfernter, lauterer Wert ersetzt keinen näheren Wert.
-- Entfernung reduziert nur den negativen Einfluss eines Fallback-Treffers, niemals den gemessenen dB-Wert.
-- Die Lageanalyse zeigt Strasse und Bahn mit eigener Distanz und eigenem Einfluss transparent an.
-- Bei einem temporären Fehler während "Neu laden" bleiben bereits geladene Standortdaten sichtbar.
-- Ein vorhandener serverseitiger Cache kann bei einem temporären Quellenfehler als transparenter Stale-Fallback verwendet werden.
+- Mikrolage wird nicht mehr aus ÖV, Einkauf, Schule, Lärm oder Leerstand abgeleitet.
+- Eine separate OpenStreetMap/Overpass-Umfeldanalyse betrachtet das unmittelbare Wohnumfeld bis 2 km.
+- Gewichtung Mikrolage: Grün & Natur 30 %, Gewässer 15 %, Freizeit & Familie 20 %, Wohnumfeld 25 %, lokale Urbanität/Dienstleistungen 10 %.
+- Grünflächen werden nicht nur nach dem nächsten Treffer, sondern zusätzlich nach Dichte innerhalb 500 m / 1 km bewertet.
+- Erfasst werden u. a. Parks, Wald/Natur, Seen/Flüsse/Bäche, Spielplätze, Sport-/Freizeitanlagen, Wohngebiet, Industrie/Gewerbe, Hauptverkehrsachsen sowie lokale Dienstleistungen.
+- Strassen-/Bahnlärm wird in der Mikrolage bewusst nicht nochmals bewertet, da dafür ein eigener Lärmfaktor existiert.
+- Die Ergebnisansicht zeigt statt "x/100 Qualität" eine transparente Kurzbeschreibung, z. B. "Grün/Natur 250 m · Gewässer 600 m · Freizeit 400 m · Wohngebiet im Umfeld".
+- Fehlen die Mikrolagedaten technisch, wird der Mikrolagefaktor nicht als gemessener Wert ausgegeben.
 
-Unverändert bleiben insbesondere ÖV, Einkauf, Schule/Betreuung, Autobahnanschluss, Leerstand, GWR/Gebäude, Kartenanzeige sowie die in V5.0 kalibrierten Distanzkurven.
+Die öffentliche Photon-/Overpass-Infrastruktur bleibt ein Fallback-/Open-Data-Zugriff. Für hohe Produktionslast sollte später ein eigener oder vertraglich abgesicherter OSM-Dienst verwendet werden.

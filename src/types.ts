@@ -99,6 +99,19 @@ export type OpenDataLocationReport = {
     nearestShoppingMeters: number | null;
     nearestSchoolMeters: number | null;
     nearestMotorwayJunctionMeters: number | null;
+    microLocationAvailable?: boolean;
+    microLocationSummary?: string | null;
+    microLocationProfile?: {
+      score: number;
+      summary: string;
+      components: {
+        green: { score: number; nearestMeters: number | null; count500m: number; count1000m: number };
+        water: { score: number; nearestMeters: number | null; count1000m: number };
+        family: { score: number; nearestMeters: number | null; count500m: number; count1000m: number };
+        residential: { score: number; nearestResidentialMeters: number | null; nearestIndustrialMeters: number | null; nearestMajorRoadMeters: number | null };
+        urbanity: { score: number; nearestMeters: number | null; count1000m: number };
+      };
+    } | null;
     searchRadiusKm?: number;
     categoryRadiusKm?: {
       transit: number | null;
