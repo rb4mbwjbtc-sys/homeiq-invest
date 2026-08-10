@@ -6,23 +6,87 @@ const distanceScore = (minutes: number, ideal: number, limit: number) => clamp(1
 export function analyseLocation(input: AnalysisInput): LocationAnalysis {
   const l = input.location;
   const evidence = input.openDataLocation?.evidence;
+  const distanceLabel = (meters: number | null | undefined, fallbackMinutes: number, mode: "walk" | "drive" = "walk") => {
+    if (evidence && meters != null) {
+      if (meters < 1000) return `${Math.round(meters)} m entfernt`;
+      return `${(meters / 1000).toFixed(1)} km entfernt`;
+    }
+    return mode === "drive" ? `${fallbackMinutes} Min. entfernt` : `${fallbackMinutes} Min. zu Fuss`;
+  };
+
   const raw = [
-    { label: "ÖV-Anbindung", available: evidence ? evidence.nearestPublicTransportMeters !== null || !!evidence.transitClass : true, score: Math.round(distanceScore(l.publicTransportMinutes, 3, 25)), detail: `${l.publicTransportMinutes} Min. zu Fuss` },
-    { label: "Einkauf", available: evidence ? evidence.nearestShoppingMeters !== null : true, score: Math.round(distanceScore(l.shoppingMinutes, 5, 35)), detail: `${l.shoppingMinutes} Min. entfernt` },
-    { label: "Schule & Betreuung", available: evidence ? evidence.nearestSchoolMeters !== null : true, score: Math.round(distanceScore(l.schoolMinutes, 8, 40)), detail: `${l.schoolMinutes} Min. entfernt` },
-    { label: "Verkehrsanbindung", available: evidence ? evidence.nearestMotorwayJunctionMeters !== null : true, score: Math.round(distanceScore(l.motorwayMinutes, 8, 55)), detail: `${l.motorwayMinutes} Min. zum Anschluss` },
-    { label: "Lärmbelastung", available: evidence ? evidence.roadNoiseDb !== null || evidence.railNoiseDb !== null : true, score: Math.round(clamp(110 - l.noiseLevel)), detail: `${l.noiseLevel}/100 Belastung` },
-    { label: "Nachfrage", available: evidence ? evidence.vacancyRate !== null : true, score: Math.round(clamp(l.municipalityDemand)), detail: `${l.municipalityDemand}/100 Nachfrage` },
-    { label: "Leerstandsrisiko", available: evidence ? evidence.vacancyRate !== null : true, score: Math.round(clamp(100 - l.vacancyRisk)), detail: `${l.vacancyRisk}/100 Risiko` },
-    { label: "Mikrolage", available: true, score: Math.round(clamp(l.microLocation)), detail: `${l.microLocation}/100 Qualität` }
+    {
+      label: "ÖV-Anbindung",
+      available: evidence ? evidence.nearestPublicTransportMeters !== null || !!evidence.transitClass : true,
+      score: Math.round(distanceScore(l.publicTransportMinutes, 3, 25)),
+      detail: distanceLabel(evidence?.nearestPublicTransportMeters, l.publicTransportMinutes),
+    },
+    {
+      label: "Einkauf",
+      available: evidence ? evidence.nearestShoppingMeters !== null : true,
+      score: Math.round(distanceScore(l.shoppingMinutes, 5, 35)),
+      detail: distanceLabel(evidence?.nearestShoppingMeters, l.shoppingMinutes),
+    },
+    {
+      label: "Schule & Betreuung",
+      available: evidence ? evidence.nearestSchoolMeters !== null : true,
+      score: Math.round(distanceScore(l.schoolMinutes, 8, 40)),
+      detail: distanceLabel(evidence?.nearestSchoolMeters, l.schoolMinutes),
+    },
+    {
+      label: "Verkehrsanbindung",
+      available: evidence ? evidence.nearestMotorwayJunctionMeters !== null : true,
+      score: Math.round(distanceScore(l.motorwayMinutes, 8, 55)),
+      detail: distanceLabel(evidence?.nearestMotorwayJunctionMeters, l.motorwayMinutes, "drive"),
+    },
+    {
+      label: "Lärmbelastung",
+      available: evidence ? evidence.roadNoiseDb !== null || evidence.railNoiseDb !== null : true,
+      score: Math.round(clamp(110 - l.noiseLevel)),
+      detail: evidence && (evidence.roadNoiseDb !== null || evidence.railNoiseDb !== null)
+        ? `${Math.max(evidence.roadNoiseDb || 0, evidence.railNoiseDb || 0)} dB` : `${l.noiseLevel}/100 Belastung`,
+    },
+    {
+      label: "Nachfrage",
+      available: evidence ? evidence.vacancyRate !== null : true,
+      score: Math.round(clamp(l.municipalityDemand)),
+      detail: `${l.municipalityDemand}/100 Nachfrage`,
+    },
+    {
+      label: "Leerstandsrisiko",
+      available: evidence ? evidence.vacancyRate !== null : true,
+      score: Math.round(clamp(100 - l.vacancyRisk)),
+      detail: evidence?.vacancyRate != null ? `${evidence.vacancyRate.toFixed(2)} % Leerwohnungsziffer` : `${l.vacancyRisk}/100 Risiko`,
+    },
+    {
+      label: "Mikrolage",
+      // Mikrolage darf bei Open-Data-Analysen nicht als scheinbar gemessener Wert erscheinen,
+      // solange sie nicht aus ausreichend vielen realen Teilfaktoren abgeleitet werden kann.
+      available: evidence ? [
+        evidence.nearestPublicTransportMeters,
+        evidence.nearestShoppingMeters,
+        evidence.nearestSchoolMeters,
+        evidence.nearestMotorwayJunctionMeters,
+      ].filter((value) => value !== null).length >= 3 : true,
+      score: Math.round(clamp(l.microLocation)),
+      detail: `${l.microLocation}/100 Qualität`,
+    },
   ];
   const weights = [0.16, 0.10, 0.08, 0.08, 0.14, 0.18, 0.14, 0.12];
-  const factors = raw.map((f) => ({ label: f.label, score: f.available ? f.score : 50, detail: f.available ? f.detail : "Nicht verfügbar · neutral gewichtet" }));
-  const score = Math.round(factors.reduce((sum, factor, index) => sum + factor.score * weights[index], 0));
-  const strengths = factors.filter(f => f.score >= 75 && !f.detail.startsWith("Nicht verfügbar")).map(f => `${f.label}: ${f.detail}`);
-  const risks = factors.filter(f => f.score < 50 && !f.detail.startsWith("Nicht verfügbar")).map(f => `${f.label}: ${f.detail}`);
+  const availableWeight = raw.reduce((sum, factor, index) => sum + (factor.available ? weights[index] : 0), 0);
+  const weightedScore = raw.reduce((sum, factor, index) => sum + (factor.available ? factor.score * weights[index] : 0), 0);
+  const score = availableWeight > 0 ? Math.round(weightedScore / availableWeight) : 50;
+  const factors = raw.map((factor) => ({
+    label: factor.label,
+    score: factor.available ? factor.score : 0,
+    detail: factor.available ? factor.detail : "Nicht verfügbar",
+  }));
+  const availableFactors = raw.filter((factor) => factor.available).length;
+  const dataCoverage = Math.round((availableFactors / raw.length) * 100);
+  const strengths = factors.filter((factor) => factor.score >= 75 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
+  const risks = factors.filter((factor) => factor.score > 0 && factor.score < 50 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
   const rating = score >= 80 ? "Sehr gute Lage" : score >= 65 ? "Gute Lage" : score >= 50 ? "Durchschnittliche Lage" : "Schwache Lage";
-  return { score, rating, factors, strengths, risks };
+  return { score, rating, factors, strengths, risks, dataCoverage, availableFactors, totalFactors: raw.length };
 }
 
 const floorFactor = (floor: string) => floor.includes("Attika") || floor.includes("PH") ? 1.08 : floor.includes("3.") ? 1.04 : floor.includes("2.") ? 1.03 : floor.includes("1.") ? 1.01 : floor === "EG" ? 0.97 : 1;

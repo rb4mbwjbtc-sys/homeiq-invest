@@ -143,6 +143,9 @@ export type LocationAnalysis = {
   factors: LocationFactor[];
   strengths: string[];
   risks: string[];
+  dataCoverage: number;
+  availableFactors: number;
+  totalFactors: number;
 };
 
 export type UnitMarketRentResult = RentalUnit & {

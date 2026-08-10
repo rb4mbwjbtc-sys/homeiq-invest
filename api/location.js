@@ -32,7 +32,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4500) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/4.1 (Swiss real-estate analysis; public/open data gateway)",
+        "User-Agent": "HomeIQ-Invest/4.2 (Swiss real-estate analysis; public/open data gateway)",
         ...(options.headers || {}),
       },
     });
@@ -52,7 +52,7 @@ async function fetchText(url, options = {}, timeoutMs = 4500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,*/*",
-        "User-Agent": "HomeIQ-Invest/4.1 (Swiss real-estate analysis; public/open data gateway)",
+        "User-Agent": "HomeIQ-Invest/4.2 (Swiss real-estate analysis; public/open data gateway)",
         ...(options.headers || {}),
       },
     });
@@ -180,23 +180,23 @@ async function fetchNearestTransit(geo) {
 
 function classifyPoi(tags = {}) {
   if (tags.highway === "motorway_junction") return "motorway";
-  if (["supermarket", "convenience", "grocery", "department_store", "mall"].includes(tags.shop)) return "shopping";
-  if (["school", "kindergarten", "childcare", "college"].includes(tags.amenity)) return "school";
+  if (["supermarket", "convenience", "grocery", "department_store", "mall", "general"].includes(tags.shop) || tags.amenity === "marketplace") return "shopping";
+  if (["school", "kindergarten", "childcare"].includes(tags.amenity)) return "school";
   return null;
 }
 
-async function overpassAtRadius(geo, kind, radiusMeters) {
+async function overpassSearch(geo, kind, radiusMeters, timeoutMs = 3300) {
   const selector = kind === "shopping"
-    ? '[shop~"supermarket|convenience|grocery|department_store|mall"]'
+    ? '(nwr(around:' + radiusMeters + ',' + geo.lat + ',' + geo.lon + ')[shop~"supermarket|convenience|grocery|department_store|mall|general"];nwr(around:' + radiusMeters + ',' + geo.lat + ',' + geo.lon + ')[amenity=marketplace];)'
     : kind === "school"
-      ? '[amenity~"school|kindergarten|childcare|college"]'
-      : '[highway=motorway_junction]';
-  const query = `[out:json][timeout:3];(nwr(around:${radiusMeters},${geo.lat},${geo.lon})${selector};);out center tags 120;`;
+      ? '(nwr(around:' + radiusMeters + ',' + geo.lat + ',' + geo.lon + ')[amenity~"school|kindergarten|childcare"]; )'
+      : '(nwr(around:' + radiusMeters + ',' + geo.lat + ',' + geo.lon + ')[highway=motorway_junction];)';
+  const query = `[out:json][timeout:3];${selector}out center tags qt 80;`;
   const requests = OVERPASS_ENDPOINTS.map((endpoint) => fetchJson(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
     body: new URLSearchParams({ data: query }).toString(),
-  }, 3600));
+  }, timeoutMs));
   try {
     const payload = await Promise.any(requests);
     let nearest = Infinity;
@@ -213,30 +213,39 @@ async function overpassAtRadius(geo, kind, radiusMeters) {
   }
 }
 
-async function adaptivePoiSearch(geo, kind, radiusStepsKm) {
-  for (const radiusKm of radiusStepsKm) {
-    const meters = await overpassAtRadius(geo, kind, radiusKm * 1000);
-    if (meters != null) return { meters, radiusKm };
-  }
-  return { meters: null, radiusKm: null };
+function radiusBucket(meters, stepsKm) {
+  if (meters == null) return null;
+  const km = meters / 1000;
+  return stepsKm.find((step) => km <= step) ?? stepsKm[stepsKm.length - 1];
 }
 
 async function fetchPois(geo) {
-  // POIs use larger radii than market interpolation: everyday services up to 20 km,
-  // motorway junctions up to 50 km. Searches stop as soon as a usable result exists.
-  const [shopping, school, motorway] = await Promise.all([
-    adaptivePoiSearch(geo, "shopping", [1, 2.5, 5, 10, 15, 20]),
-    adaptivePoiSearch(geo, "school", [1, 2.5, 5, 10, 15, 20]),
-    adaptivePoiSearch(geo, "motorway", [5, 10, 20, 35, 50]),
-  ]);
+  // Zwei Suchstufen statt vieler serieller Overpass-Abfragen: schnell im Nahbereich,
+  // danach nur für fehlende Kategorien ein grosser Fallback-Radius.
+  const configs = {
+    shopping: { near: 5, far: 20, steps: [1, 2.5, 5, 10, 15, 20] },
+    school: { near: 5, far: 20, steps: [1, 2.5, 5, 10, 15, 20] },
+    motorway: { near: 15, far: 50, steps: [5, 10, 15, 20, 35, 50] },
+  };
+
+  const kinds = ["shopping", "school", "motorway"];
+  const nearResults = await Promise.all(kinds.map((kind) => overpassSearch(geo, kind, configs[kind].near * 1000)));
+  const results = Object.fromEntries(kinds.map((kind, index) => [kind, nearResults[index]]));
+
+  const missingKinds = kinds.filter((kind) => results[kind] == null);
+  if (missingKinds.length) {
+    const farResults = await Promise.all(missingKinds.map((kind) => overpassSearch(geo, kind, configs[kind].far * 1000, 3900)));
+    missingKinds.forEach((kind, index) => { results[kind] = farResults[index]; });
+  }
+
   return {
-    shoppingMeters: shopping.meters,
-    schoolMeters: school.meters,
-    motorwayMeters: motorway.meters,
+    shoppingMeters: results.shopping,
+    schoolMeters: results.school,
+    motorwayMeters: results.motorway,
     categoryRadiusKm: {
-      shopping: shopping.radiusKm,
-      school: school.radiusKm,
-      motorway: motorway.radiusKm,
+      shopping: radiusBucket(results.shopping, configs.shopping.steps),
+      school: radiusBucket(results.school, configs.school.steps),
+      motorway: radiusBucket(results.motorway, configs.motorway.steps),
     },
   };
 }
@@ -448,7 +457,7 @@ export default async function handler(req, res) {
 
   try {
     const geo = await geocodeAddress(street, postalCode, city);
-    const [gwrR, municipalityR, transitClassR, roadNoiseR, railNoiseR, transitR, poisR, marketR] = await Promise.allSettled([
+    const [gwrR, municipalityR, transitClassR, roadNoiseR, railNoiseR, transitR, poisR, marketR, vacancyR] = await Promise.allSettled([
       fetchGwr(geo),
       identifyLayer("ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill", geo, 6),
       identifyLayer("ch.are.gueteklassen_oev", geo, 8),
@@ -457,6 +466,7 @@ export default async function handler(req, res) {
       fetchNearestTransit(geo),
       fetchPois(geo),
       fetchMarketLayers(city, propertyType, rooms),
+      fetchVacancyRate(null, city),
     ]);
 
     const unwrap = (r, fallback = null) => r.status === "fulfilled" ? r.value : fallback;
@@ -466,7 +476,8 @@ export default async function handler(req, res) {
     const municipalityName = gwr?.municipality || municipalityParsed.municipality || city;
     const municipalityBfs = gwr?.municipalityBfs || municipalityParsed.municipalityBfs;
 
-    const vacancy = await fetchVacancyRate(municipalityBfs, municipalityName);
+    let vacancy = unwrap(vacancyR);
+    if (!vacancy && municipalityBfs) vacancy = await fetchVacancyRate(municipalityBfs, municipalityName);
     const transitClass = parseTransitClass(unwrap(transitClassR));
     const roadNoiseDb = parseNoiseDb(unwrap(roadNoiseR));
     const railNoiseDb = parseNoiseDb(unwrap(railNoiseR));
@@ -516,9 +527,7 @@ export default async function handler(req, res) {
     if (pois.shoppingMeters == null) missing.push("Einkauf");
     if (pois.schoolMeters == null) missing.push("Schule/Betreuung");
     if (pois.motorwayMeters == null) missing.push("Autobahnanschluss");
-    if (market.pricePerSqm == null) missing.push("Marktpreis-Benchmark");
-    if (market.rentPerSqm == null) missing.push("Marktmiet-Benchmark");
-    const foundCount = 8 - missing.length;
+    const foundCount = 6 - missing.length;
 
     const body = {
       address: { formatted: geo.formattedAddress, lat: geo.lat, lon: geo.lon, easting: geo.easting, northing: geo.northing },
@@ -543,7 +552,7 @@ export default async function handler(req, res) {
         },
       },
       market,
-      quality: foundCount >= 7 ? "hoch" : foundCount >= 4 ? "mittel" : "eingeschränkt",
+      quality: foundCount >= 5 ? "hoch" : foundCount >= 3 ? "mittel" : "eingeschränkt",
       missing,
       loadedAt: new Date().toISOString(),
       sources: [

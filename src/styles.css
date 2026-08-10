@@ -683,3 +683,51 @@ img,svg,iframe{max-width:100%}
 .print-report.pdf-capture .print-bottom-grid p{font-size:7.5px!important;line-height:1.22!important}
 .print-report.pdf-capture .print-osm-map,.print-report.pdf-capture .print-osm-map .osm-map-viewport{height:88px!important;min-height:88px!important}
 .print-report.pdf-capture .print-footer{margin-top:5px!important;font-size:7px!important}
+
+/* HomeIQ V4.2 – Reliable Location Data */
+.location-market-actions{margin-top:22px;padding-top:22px;border-top:1px solid var(--line);display:grid;gap:16px}
+.market-section-header h3{margin:3px 0 5px;font-size:23px}.market-section-header p{margin:0;color:var(--muted);line-height:1.5}
+.market-location-action{margin:0!important}
+.location-badge{white-space:nowrap}
+.print-location-score small{display:block;margin-top:2px;font-size:7px;font-weight:600;color:var(--muted)}
+.location-factor strong{white-space:nowrap}
+
+/* PDF: Scorekarte erhält eine feste quadratische Geometrie. Dadurch verschiebt html2canvas
+   den Kreis nicht mehr innerhalb der rechten Kopfspalte. */
+.print-report.pdf-capture .print-header{align-items:start!important}
+.print-report.pdf-capture .print-header>.homeiq-score-card.print-mode{
+  box-sizing:border-box!important;
+  justify-self:end!important;
+  align-self:start!important;
+  position:relative!important;
+  width:150px!important;
+  height:150px!important;
+  min-width:150px!important;
+  max-width:150px!important;
+  min-height:150px!important;
+  max-height:150px!important;
+  padding:8px!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  overflow:hidden!important;
+}
+.print-report.pdf-capture .print-header>.homeiq-score-card.print-mode .homeiq-score-gauge{
+  flex:0 0 78px!important;
+  width:78px!important;
+  height:78px!important;
+  margin:0 auto!important;
+  position:relative!important;
+  transform:none!important;
+}
+.print-report.pdf-capture .print-header>.homeiq-score-card.print-mode .homeiq-score-gauge svg{
+  position:absolute!important;inset:0!important;width:78px!important;height:78px!important;overflow:visible!important;
+}
+.print-report.pdf-capture .print-header>.homeiq-score-card.print-mode .homeiq-score-center{
+  position:absolute!important;inset:0!important;width:100%!important;height:100%!important;display:grid!important;place-items:center!important;
+}
+.print-report.pdf-capture .print-header>.homeiq-score-card.print-mode .homeiq-score-value{transform:none!important;margin:0!important}
+.print-report.pdf-capture .print-header>.homeiq-score-card.print-mode .homeiq-score-title{margin-top:2px!important}
+.print-report.pdf-capture .print-header>.homeiq-score-card.print-mode .homeiq-score-rating{margin-top:1px!important}
+
+@media(max-width:820px){.location-market-actions{margin-top:16px;padding-top:16px}.location-badge{white-space:normal;text-align:right}}

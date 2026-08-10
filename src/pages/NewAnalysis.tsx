@@ -258,7 +258,7 @@ export function NewAnalysis() {
     const monthlyRent =
       form.propertyType === "mfh"
         ? form.rentalUnits.reduce((sum, unit) => sum + unit.currentMonthlyRent, 0)
-        : form.monthlyRent + (form.parkingMonthlyRent || 0);
+        : form.monthlyRent;
     const livingArea =
       form.propertyType === "mfh"
         ? form.rentalUnits.reduce((sum, unit) => sum + unit.livingArea, 0)
@@ -280,9 +280,9 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V4.1</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V4.2</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
-        <p>Mit Lageanalyse, Marktwert- und Marktmietschätzung.</p>
+        <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
 
       <div className="steps five">
@@ -648,7 +648,7 @@ export function NewAnalysis() {
                 <div>
                   <span className="eyebrow">AUTOMATISCHE DATENANALYSE</span>
                   <h3>{form.openDataLocation.address.formatted}</h3>
-                  <p>{8 - form.openDataLocation.missing.length} von 8 Lage-/Marktbausteinen verfügbar.</p>
+                  <p>{Math.max(0, 6 - form.openDataLocation.missing.length)} von 6 zentralen Lagedatenpunkten verfügbar.</p>
                 </div>
                 <span className={`data-quality quality-${form.openDataLocation.quality}`}>Datenqualität: {form.openDataLocation.quality}</span>
               </div>
@@ -664,21 +664,10 @@ export function NewAnalysis() {
                 <div><span>Gebäude</span><strong>{form.openDataLocation.building?.constructionYear ? `Baujahr ${form.openDataLocation.building.constructionYear}` : form.openDataLocation.building?.egid ? `EGID ${form.openDataLocation.building.egid}` : "nicht verfügbar"}</strong></div>
               </div>
 
-              <div className="open-data-market-summary clean-market-summary">
-                <div className={form.openDataLocation.market?.pricePerSqm ? "available" : "unavailable"}>
-                  <span>Marktpreis-Benchmark</span>
-                  <strong>{form.openDataLocation.market?.pricePerSqm != null ? `CHF ${form.openDataLocation.market.pricePerSqm.toLocaleString("de-CH")} / m²` : "Nicht verfügbar"}</strong>
-                  <small>{form.openDataLocation.market?.priceSource || "Keine ausreichend belastbaren öffentlichen Vergleichsdaten gefunden."}</small>
-                </div>
-                <div className={form.openDataLocation.market?.rentPerSqm ? "available" : "unavailable"}>
-                  <span>Marktmiet-Benchmark</span>
-                  <strong>{form.openDataLocation.market?.rentPerSqm != null ? `CHF ${form.openDataLocation.market.rentPerSqm.toFixed(2)} / m² / Monat` : "Nicht verfügbar"}</strong>
-                  <small>{form.openDataLocation.market?.rentSource || "Keine ausreichend belastbaren öffentlichen Mietdaten gefunden."}</small>
-                </div>
-              </div>
+
 
               {form.openDataLocation.missing.length > 0 && (
-                <p className="open-data-missing">Nicht verfügbar: {form.openDataLocation.missing.join(", ")}. Diese Werte werden in der Analyse neutral behandelt und nicht durch erfundene Annahmen ersetzt.</p>
+                <p className="open-data-missing">Nicht verfügbar: {form.openDataLocation.missing.join(", ")}. Diese Werte werden nicht erfunden und nicht als gemessene Teilwerte in den Lage-Score einbezogen.</p>
               )}
 
               <details className="open-data-sources">
@@ -691,6 +680,119 @@ export function NewAnalysis() {
               </details>
             </section>
           ) : null}
+          {locationLoaded && form.openDataLocation && (
+            <section className="location-market-actions">
+              <div className="market-section-header">
+                <span className="eyebrow">MARKTDATEN</span>
+                <h3>Marktwert und Marktmiete</h3>
+                <p>HomeIQ verwendet nur belastbare gefundene Benchmarks. Nicht verfügbare Werte werden nicht ersetzt oder geschätzt.</p>
+              </div>
+
+              <div className="clean-market-summary">
+                <div className={form.openDataLocation.market?.pricePerSqm ? "available" : "unavailable"}>
+                  <span>Marktpreis-Benchmark</span>
+                  <strong>{form.openDataLocation.market?.pricePerSqm != null ? `CHF ${form.openDataLocation.market.pricePerSqm.toLocaleString("de-CH")} / m²` : "Nicht verfügbar"}</strong>
+                  <small>{form.openDataLocation.market?.priceSource || "Keine ausreichend belastbaren öffentlichen Vergleichsdaten gefunden."}</small>
+                </div>
+                <div className={form.openDataLocation.market?.rentPerSqm ? "available" : "unavailable"}>
+                  <span>Marktmiet-Benchmark</span>
+                  <strong>{form.openDataLocation.market?.rentPerSqm != null ? `CHF ${form.openDataLocation.market.rentPerSqm.toFixed(2)} / m² / Monat` : "Nicht verfügbar"}</strong>
+                  <small>{form.openDataLocation.market?.rentSource || "Keine ausreichend belastbaren öffentlichen Mietdaten gefunden."}</small>
+                </div>
+              </div>
+
+              <div className="premium-action market-location-action">
+                <span className="premium-kicker">PREMIUM</span>
+                <strong>Optimalen Kaufpreis berechnen</strong>
+                <p>Unabhängige Marktwertschätzung aus Lage-, Objekt- und belastbaren regionalen Marktdaten.</p>
+                <button
+                  type="button"
+                  className="market-action-button"
+                  onClick={generateMarketValue}
+                  disabled={form.regionalMarketPricePerSqm <= 0}
+                >
+                  <Sparkles size={20} /> Optimalen Kaufpreis berechnen (Premium)
+                </button>
+                {form.regionalMarketPricePerSqm <= 0 && (
+                  <small className="market-data-unavailable">Kein belastbarer Marktpreis-Benchmark gefunden. HomeIQ berechnet deshalb bewusst keinen Ersatzwert.</small>
+                )}
+                {marketValueGenerated !== null && generatedMarket && (
+                  <div className="market-calculation-card">
+                    <div className="market-card-heading">
+                      <span className="eyebrow">MARKTWERTANALYSE</span>
+                      <h3>Geschätzter Marktwert</h3>
+                      <p>Der eingegebene Kaufpreis beeinflusst die Marktwertschätzung nicht.</p>
+                    </div>
+                    <div className="market-main-value">
+                      <span>GESCHÄTZTER MARKTWERT</span>
+                      <strong>{money(generatedMarket.estimatedMarketValue)}</strong>
+                      <small>Marktwertspanne: {money(generatedMarket.marketValueLow)} – {money(generatedMarket.marketValueHigh)}</small>
+                    </div>
+                    {form.purchasePrice > 0 && (
+                      <div className="market-comparison-row">
+                        <div><span>IHR EINGETRAGENER KAUFPREIS</span><strong>{money(form.purchasePrice)}</strong></div>
+                        <b className={generatedMarket.priceDifferencePercent >= 0 ? "positive-text" : "negative-text"}>{generatedMarket.priceDifferencePercent >= 0 ? "+" : ""}{generatedMarket.priceDifferencePercent.toFixed(1)} %</b>
+                      </div>
+                    )}
+                    <div className="market-offer-row attractive">
+                      <div><span>ATTRAKTIVER KAUFPREIS</span><strong>{money(generatedMarket.estimatedMarketValue * 0.94)}</strong></div>
+                      <button type="button" className="button secondary" onClick={() => useAttractivePurchasePrice(0.94)}>Übernehmen</button>
+                    </div>
+                    <div className="market-offer-row very-attractive">
+                      <div><span>SEHR ATTRAKTIVER KAUFPREIS</span><strong>{money(generatedMarket.estimatedMarketValue * 0.88)}</strong></div>
+                      <button type="button" className="button secondary" onClick={() => useAttractivePurchasePrice(0.88)}>Übernehmen</button>
+                    </div>
+                    <small className="market-source">Datenbasis: {form.openDataLocation.market.priceSource || "öffentliche Marktdaten"} · Datenqualität: {form.openDataLocation.market.confidence}</small>
+                  </div>
+                )}
+              </div>
+
+              <div className="market-rent-action market-location-action">
+                <button
+                  type="button"
+                  className="market-action-button"
+                  onClick={generateMarketRent}
+                  disabled={form.regionalMarketRentPerSqm <= 0}
+                >
+                  <Sparkles size={20} /> Marktmiete automatisch berechnen (Premium)
+                </button>
+                {form.regionalMarketRentPerSqm <= 0 && (
+                  <small className="market-data-unavailable">Kein belastbarer Marktmiet-Benchmark gefunden. HomeIQ berechnet deshalb bewusst keine Ersatzmiete.</small>
+                )}
+                {marketRentGenerated !== null && generatedMarket && (
+                  <div className="market-calculation-card rent-card">
+                    <div className="market-card-heading">
+                      <span className="eyebrow">MARKTMIETANALYSE</span>
+                      <h3>Geschätzte Marktmiete</h3>
+                      <p>Die Schätzung basiert auf Lage, Objektmerkmalen und dem gefundenen regionalen Mietbenchmark.</p>
+                    </div>
+                    <div className="market-main-value">
+                      <span>GESCHÄTZTE MARKTMIETE</span>
+                      <strong>{money(generatedMarket.estimatedMonthlyMarketRent)} <em>/ Monat</em></strong>
+                      <small>Marktspanne: {money(generatedMarket.estimatedMonthlyMarketRent * 0.90)} – {money(generatedMarket.estimatedMonthlyMarketRent * 1.10)} / Monat</small>
+                    </div>
+                    {generatedMarket.currentMonthlyRent > 0 && (
+                      <div className="market-comparison-row">
+                        <div><span>IHRE EINGETRAGENE NETTOMIETE</span><strong>{money(generatedMarket.currentMonthlyRent)} / Mt.</strong></div>
+                        <b className={generatedMarket.rentDifferencePercent >= 0 ? "positive-text" : "negative-text"}>{generatedMarket.rentDifferencePercent >= 0 ? "+" : ""}{generatedMarket.rentDifferencePercent.toFixed(1)} %</b>
+                      </div>
+                    )}
+                    {form.propertyType === "mfh" && (
+                      <div className="unit-market-rent-preview">
+                        {generatedMarket.units.map((unit) => <div key={unit.id}><span>{unit.label}</span><strong>{money(unit.estimatedMonthlyMarketRent)} / Monat</strong></div>)}
+                      </div>
+                    )}
+                    <div className="market-choice-actions">
+                      <button type="button" className="button market-accept" onClick={useMarketRent}>{form.propertyType === "mfh" ? "Marktmieten für alle Wohnungen übernehmen" : "Marktmiete übernehmen"}</button>
+                      <button type="button" className="button text-choice" onClick={() => setMarketRentGenerated(null)}>Nicht übernehmen</button>
+                    </div>
+                    <small className="market-source">Datenbasis: {form.openDataLocation.market.rentSource || "öffentliche Marktdaten"} · Datenqualität: {form.openDataLocation.market.confidence}</small>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
           <div className="form-footer">
             <button className="button secondary" onClick={() => setStep(2)}>
               Zurück
@@ -730,75 +832,7 @@ export function NewAnalysis() {
               />
             </label>
 
-            <div className="full premium-action">
-              <span className="premium-kicker">PREMIUM</span>
-              <strong>Optimalen Kaufpreis berechnen</strong>
-              <p>
-                HomeIQ nutzt Objekt-, Lage- und Ausstattungsdaten, um den Marktwert
-                unabhängig vom eingegebenen Kaufpreis zu schätzen.
-              </p>
-              <button
-                className="market-action-button"
-                onClick={generateMarketValue}
-                disabled={!locationLoaded || form.regionalMarketPricePerSqm <= 0}
-              >
-                <Sparkles size={20} /> Optimalen Kaufpreis berechnen (Premium)
-              </button>
-              {locationLoaded && form.regionalMarketPricePerSqm <= 0 && (
-                <small className="market-data-unavailable">Noch kein belastbarer öffentlicher Marktpreis-Benchmark verfügbar. HomeIQ berechnet bewusst keinen erfundenen Marktwert. Ebene 3 ist vorbereitet, aber ohne offiziellen Zugang deaktiviert.</small>
-              )}
-              {marketValueGenerated !== null && generatedMarket && (
-                <div className="market-calculation-card">
-                  <div className="market-card-heading">
-                    <span className="eyebrow">MARKTWERTANALYSE</span>
-                    <h3>Geschätzter Marktwert</h3>
-                    <p>
-                      Unabhängige Schätzung auf Basis von Lage, Zustand, Ausstattung und
-                      regionalem Vergleichswert. Der eingegebene Kaufpreis fliesst nicht
-                      in die Marktwertberechnung ein.
-                    </p>
-                  </div>
-                  <div className="market-main-value">
-                    <span>GESCHÄTZTER MARKTWERT</span>
-                    <strong>{money(generatedMarket.estimatedMarketValue)}</strong>
-                    <small>
-                      Marktwertspanne: {money(generatedMarket.marketValueLow)} – {money(generatedMarket.marketValueHigh)}
-                    </small>
-                  </div>
-                  <div className="market-comparison-row">
-                    <div>
-                      <span>IHR EINGETRAGENER KAUFPREIS</span>
-                      <strong>{money(form.purchasePrice)}</strong>
-                    </div>
-                    <b className={generatedMarket.priceDifferencePercent >= 0 ? "positive-text" : "negative-text"}>
-                      {generatedMarket.priceDifferencePercent >= 0 ? "+" : ""}{generatedMarket.priceDifferencePercent.toFixed(1)} %
-                    </b>
-                  </div>
-                  <div className="market-offer-row attractive">
-                    <div>
-                      <span>ATTRAKTIVER KAUFPREIS</span>
-                      <strong>{money(generatedMarket.estimatedMarketValue * 0.94)}</strong>
-                    </div>
-                    <button type="button" className="button secondary" onClick={() => useAttractivePurchasePrice(0.94)}>Übernehmen</button>
-                  </div>
-                  <div className="market-offer-row very-attractive">
-                    <div>
-                      <span>SEHR ATTRAKTIVER KAUFPREIS</span>
-                      <strong>{money(generatedMarket.estimatedMarketValue * 0.88)}</strong>
-                    </div>
-                    <button type="button" className="button secondary" onClick={() => useAttractivePurchasePrice(0.88)}>Übernehmen</button>
-                  </div>
-                  <p className="market-explanation">
-                    Die Schätzung berücksichtigt den regionalen Quadratmeterpreis, die
-                    Lagequalität, den Objektzustand, den Ausbaustandard und vorhandene
-                    Ausstattungsmerkmale.
-                  </p>
-                  <small className="market-source">
-                    Datenbasis: {form.openDataLocation?.market.priceSource || "öffentliche Marktdaten"} · Datenqualität: {form.openDataLocation?.market.confidence || generatedMarket.confidence}
-                  </small>
-                </div>
-              )}
-            </div>
+
 
             <label>
               Eigenkapital (CHF)
@@ -864,70 +898,7 @@ export function NewAnalysis() {
               </div>
             )}
 
-            <div className="full market-rent-action">
-              <button
-                className="market-action-button"
-                onClick={generateMarketRent}
-                disabled={!locationLoaded || form.regionalMarketRentPerSqm <= 0}
-              >
-                <Sparkles size={20} /> Marktmiete automatisch berechnen (Premium)
-              </button>
-              {locationLoaded && form.regionalMarketRentPerSqm <= 0 && (
-                <small className="market-data-unavailable">Noch kein belastbarer öffentlicher Marktmiet-Benchmark verfügbar. HomeIQ erfindet keine Ersatzmiete; lokale/kantonale Open Data werden automatisch gesucht.</small>
-              )}
-              {marketRentGenerated !== null && generatedMarket && (
-                <div className="market-calculation-card rent-card">
-                  <div className="market-card-heading">
-                    <span className="eyebrow">MARKTMIETANALYSE</span>
-                    <h3>Geschätzte Marktmiete</h3>
-                    <p>
-                      Unabhängige Schätzung auf Basis von Lage, Objektdaten und regionalen
-                      Marktinformationen. Die eingegebene Miete fliesst nicht in die
-                      Berechnung ein.
-                    </p>
-                  </div>
-                  <div className="market-main-value">
-                    <span>GESCHÄTZTE MARKTMIETE</span>
-                    <strong>{money(generatedMarket.estimatedMonthlyMarketRent)} <em>/ Monat</em></strong>
-                    <small>
-                      Marktspanne: {money(generatedMarket.estimatedMonthlyMarketRent * 0.90)} – {money(generatedMarket.estimatedMonthlyMarketRent * 1.10)} / Monat
-                    </small>
-                  </div>
-                  <div className="market-comparison-row">
-                    <div>
-                      <span>IHRE EINGETRAGENE NETTOMIETE</span>
-                      <strong>{money(generatedMarket.currentMonthlyRent)} / Mt.</strong>
-                    </div>
-                    <b className={generatedMarket.rentDifferencePercent >= 0 ? "positive-text" : "negative-text"}>
-                      {generatedMarket.rentDifferencePercent >= 0 ? "+" : ""}{generatedMarket.rentDifferencePercent.toFixed(1)} %
-                    </b>
-                  </div>
-                  <p className="market-explanation">
-                    Die Schätzung berücksichtigt Lagequalität, Wohnfläche, Stockwerk,
-                    Zustand, Ausbaustandard, Ausstattung und Parkierung.
-                  </p>
-                  <small className="market-source">
-                    Datenbasis: {form.openDataLocation?.market.rentSource || "öffentliche Marktdaten"} · Datenqualität: {form.openDataLocation?.market.confidence || generatedMarket.confidence}
-                  </small>
-                  {form.propertyType === "mfh" && (
-                    <div className="unit-market-rent-preview">
-                      {generatedMarket.units.map((unit) => (
-                        <div key={unit.id}>
-                          <span>{unit.label}</span>
-                          <strong>{money(unit.estimatedMonthlyMarketRent)} / Monat</strong>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div className="market-choice-actions">
-                    <button type="button" className="button market-accept" onClick={useMarketRent}>
-                      {form.propertyType === "mfh" ? "Marktmieten für alle Wohnungen übernehmen" : "Marktmiete übernehmen"}
-                    </button>
-                    <button type="button" className="button text-choice" onClick={() => setMarketRentGenerated(null)}>Eigene Miete verwenden</button>
-                  </div>
-                </div>
-              )}
-            </div>
+
 
             <label>
               Betriebskosten / Jahr

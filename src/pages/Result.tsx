@@ -113,7 +113,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V4.1</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V4.2</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -209,7 +209,7 @@ export function Result() {
               <h2>{location.rating}</h2>
             </div>
             <div className="location-badge">
-              <MapPin size={18} /> {location.score}/100
+              <MapPin size={18} /> {location.score}/100 · Datenabdeckung {location.dataCoverage}%
             </div>
           </div>
           <div className="location-grid">
@@ -217,12 +217,12 @@ export function Result() {
               <div className="location-factor" key={factor.label}>
                 <div>
                   <span>{factor.label}</span>
-                  <strong>{factor.score}/100</strong>
+                  <strong>{factor.detail === "Nicht verfügbar" ? "—" : `${factor.score}/100`}</strong>
                 </div>
                 <div className="bar">
                   <i
                     style={{
-                      width: `${factor.score}%`,
+                      width: factor.detail === "Nicht verfügbar" ? "0%" : `${factor.score}%`,
                       background: scoreColor(factor.score),
                     }}
                   />
@@ -297,7 +297,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V4.1</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V4.2</span></div>
             <h1>{input.title}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
@@ -392,7 +392,7 @@ export function Result() {
           </div>
           <div className="print-location-column">
             <h2>LAGE</h2>
-            <div className="print-location-score">{location.score}/100 · {location.rating}</div>
+            <div className="print-location-score">{location.score}/100 · {location.rating}<small>Datenabdeckung {location.dataCoverage}%</small></div>
             <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} coordinates={input.openDataLocation?.address ?? null} print />
 
           </div>
