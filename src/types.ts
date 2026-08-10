@@ -106,13 +106,11 @@ export type OpenDataLocationReport = {
       dataCoverage?: number;
       summary: string;
       components: {
-        green: { available?: boolean; score: number; nearestMeters: number | null; count500m: number; count1000m: number };
-        water: { available?: boolean; active?: boolean; score: number | null; nearestMeters: number | null; count1000m: number };
-        family: { available?: boolean; score: number; nearestMeters: number | null; count500m: number; count1000m: number };
-        residential: { available?: boolean; active?: boolean; score: number | null; nearestResidentialMeters: number | null; nearestIndustrialMeters: number | null; nearestCommercialMeters?: number | null; nearestMajorRoadMeters: number | null; nearestRailwayMeters?: number | null };
-        urbanity: { available?: boolean; score: number; nearestMeters: number | null; count1000m: number };
+        green: { available?: boolean; score: number; nearestMeters: number | null };
+        water: { available?: boolean; score: number | null; nearestMeters: number | null };
+        family: { available?: boolean; score: number; nearestMeters: number | null };
+        convenience: { available?: boolean; score: number; nearestMeters: number | null };
       };
-      moduleStatus?: Record<string, string>;
     } | null;
     searchRadiusKm?: number;
     categoryRadiusKm?: {

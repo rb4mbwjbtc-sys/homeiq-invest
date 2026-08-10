@@ -47,7 +47,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4200) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/5.3 (robust modular OSM micro-location Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/5.1 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -67,7 +67,7 @@ async function fetchText(url, options = {}, timeoutMs = 3500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,application/geo+json,application/json,*/*",
-        "User-Agent": "HomeIQ-Invest/5.3 (robust modular OSM micro-location Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/5.1 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -678,58 +678,23 @@ const schoolQuery = (r) => `
   nwr(around:${r},{{LAT}},{{LON}})[amenity=college];`;
 const motorwayQuery = (r) => `nwr(around:${r},{{LAT}},{{LON}})[highway=motorway_junction];`;
 
-const microGreenQuery = (r) => `
-  nwr(around:${r},{{LAT}},{{LON}})[leisure~"park|garden|recreation_ground"];
-  nwr(around:${r},{{LAT}},{{LON}})[natural~"wood|heath|scrub"];
-  nwr(around:${r},{{LAT}},{{LON}})[landuse~"forest|grass|meadow|recreation_ground|village_green"];`;
+const microLocationQuery = (r) => `
+  nwr(around:${r},{{LAT}},{{LON}})[leisure~"park|garden|playground|sports_centre|pitch|recreation_ground|swimming_pool"];
+  nwr(around:${r},{{LAT}},{{LON}})[natural~"wood|water|heath|scrub"];
+  nwr(around:${r},{{LAT}},{{LON}})[landuse~"forest|grass|meadow|recreation_ground|village_green|residential|industrial|commercial"];
+  nwr(around:${r},{{LAT}},{{LON}})[waterway~"river|stream|canal"];
+  nwr(around:${r},{{LAT}},{{LON}})[amenity~"restaurant|cafe|pharmacy|library|community_centre|doctors|clinic"];
+  nwr(around:${r},{{LAT}},{{LON}})[shop=bakery];
+  nwr(around:${r},{{LAT}},{{LON}})[highway~"motorway|trunk|primary"];`;
 
-const microWaterQuery = (r) => `
-  nwr(around:${r},{{LAT}},{{LON}})[natural=water];
-  nwr(around:${r},{{LAT}},{{LON}})[water~"lake|pond|reservoir|river|canal"];
-  nwr(around:${r},{{LAT}},{{LON}})[waterway~"river|stream|canal"];`;
-
-const microFamilyQuery = (r) => `
-  nwr(around:${r},{{LAT}},{{LON}})[leisure~"playground|sports_centre|pitch|swimming_pool|recreation_ground"];
-  nwr(around:${r},{{LAT}},{{LON}})[amenity~"community_centre|youth_centre"];
-  nwr(around:${r},{{LAT}},{{LON}})[sport];`;
-
-const microEnvironmentQuery = (r) => `
-  nwr(around:${r},{{LAT}},{{LON}})[landuse~"residential|industrial|commercial|retail"];
-  way(around:${r},{{LAT}},{{LON}})[highway~"motorway|trunk|primary"];
-  way(around:${r},{{LAT}},{{LON}})[railway=rail];`;
-
-const microUrbanityQuery = (r) => `
-  nwr(around:${r},{{LAT}},{{LON}})[amenity~"restaurant|cafe|pharmacy|library|community_centre|doctors|clinic|post_office|bank"];
-  nwr(around:${r},{{LAT}},{{LON}})[shop~"bakery|butcher|chemist|hairdresser|kiosk"];
-  nwr(around:${r},{{LAT}},{{LON}})[healthcare];`;
-
-function geometryPoints(element) {
-  const points = [];
-  const add = (candidate) => {
-    const lat = Number(candidate?.lat);
-    const lon = Number(candidate?.lon);
-    if (Number.isFinite(lat) && Number.isFinite(lon)) points.push({ lat, lon });
-  };
-  add(element);
-  add(element?.center);
-  for (const point of element?.geometry || []) add(point);
-  for (const member of element?.members || []) {
-    add(member);
-    for (const point of member?.geometry || []) add(point);
-  }
-  return points;
+function elementPoint(element) {
+  const lat = Number(element?.lat ?? element?.center?.lat);
+  const lon = Number(element?.lon ?? element?.center?.lon);
+  return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
 }
 
-function elementDistanceMeters(geo, element) {
-  const points = geometryPoints(element);
-  if (!points.length) return null;
-  // Bei grossen Polygonen/Linien ist der Abstand zur Geometrie entscheidend,
-  // nicht zum Mittelpunkt (z.B. Bodensee, Wald- oder Parkflächen).
-  return Math.min(...points.map((point) => haversine({ lat: geo.lat, lon: geo.lon }, point)));
-}
-
-async function overpassMicroElements(geo, queryBody, radiusMeters, timeoutMs = 6800) {
-  const query = `[out:json][timeout:6];(${queryBody(radiusMeters)});out body geom qt 4500;`;
+async function overpassElements(geo, queryBody, radiusMeters, timeoutMs = 7600) {
+  const query = `[out:json][timeout:6];(${queryBody(radiusMeters)});out center tags qt 6000;`;
   const requests = OVERPASS_ENDPOINTS.map((endpoint) => fetchJson(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
@@ -742,16 +707,13 @@ async function overpassMicroElements(geo, queryBody, radiusMeters, timeoutMs = 6
     if (entry.status !== "fulfilled") continue;
     successful += 1;
     for (const element of entry.value.elements || []) {
-      const distance = elementDistanceMeters(geo, element);
-      // Overpass around() prüft die echte Geometrie. Falls keine verwertbare
-      // Geometrie zurückkommt, behalten wir das Element statt es wegen eines
-      // weit entfernten Polygon-Mittelpunkts fälschlich zu verwerfen.
-      if (distance != null && distance > radiusMeters + 30) continue;
-      const point = geometryPoints(element)[0];
-      const key = `${element.type || "x"}:${element.id || `${point?.lat || 0}:${point?.lon || 0}`}`;
-      const distanceMeters = distance == null ? radiusMeters : Math.round(distance);
-      if (!dedup.has(key) || distanceMeters < dedup.get(key).distanceMeters) {
-        dedup.set(key, { ...element, distanceMeters });
+      const point = elementPoint(element);
+      if (!point) continue;
+      const distance = haversine({ lat: geo.lat, lon: geo.lon }, point);
+      if (distance > radiusMeters) continue;
+      const key = `${element.type || "x"}:${element.id || `${point.lat}:${point.lon}`}`;
+      if (!dedup.has(key) || distance < dedup.get(key).distanceMeters) {
+        dedup.set(key, { ...element, distanceMeters: Math.round(distance) });
       }
     }
   }
@@ -778,141 +740,97 @@ function curveScore(distance, points, fallback) {
   return points[points.length - 1][1];
 }
 
-async function fetchMicroModule(geo, name, queryBuilder) {
-  const result = await retryNullable(
-    () => overpassMicroElements(geo, withCoords(queryBuilder, geo), 2000, 6800),
-    2,
-    220,
-  );
-  if (result.value != null) return { name, status: "loaded", elements: result.value };
-  return {
-    name,
-    status: result.hadSuccessfulRequest ? "loaded" : "error",
-    elements: [],
-    error: result.lastError instanceof Error ? result.lastError.message : null,
-  };
-}
-
-function splitEnvironment(elements) {
+function microLocationFromElements(elements) {
+  const green = [];
+  const water = [];
+  const family = [];
   const residential = [];
   const industrial = [];
-  const commercial = [];
   const majorRoad = [];
-  const railway = [];
+  const urban = [];
+
   for (const element of elements) {
     const tags = element.tags || {};
-    if (tags.landuse === "residential") residential.push(element);
-    if (tags.landuse === "industrial") industrial.push(element);
-    if (/commercial|retail/.test(tags.landuse || "")) commercial.push(element);
-    if (/motorway|trunk|primary/.test(tags.highway || "")) majorRoad.push(element);
-    if (tags.railway === "rail") railway.push(element);
+    const leisure = tags.leisure || "";
+    const natural = tags.natural || "";
+    const landuse = tags.landuse || "";
+    const waterway = tags.waterway || "";
+    const amenity = tags.amenity || "";
+    const shop = tags.shop || "";
+    const highway = tags.highway || "";
+
+    if (/park|garden|recreation_ground/.test(leisure) || /wood|heath|scrub/.test(natural) || /forest|grass|meadow|recreation_ground|village_green/.test(landuse)) green.push(element);
+    if (natural === "water" || /river|stream|canal/.test(waterway)) water.push(element);
+    if (/playground|sports_centre|pitch|swimming_pool|recreation_ground/.test(leisure)) family.push(element);
+    if (landuse === "residential") residential.push(element);
+    if (/industrial|commercial/.test(landuse)) industrial.push(element);
+    if (/motorway|trunk|primary/.test(highway)) majorRoad.push(element);
+    if (/restaurant|cafe|pharmacy|library|community_centre|doctors|clinic/.test(amenity) || shop === "bakery") urban.push(element);
   }
-  return { residential, industrial, commercial, majorRoad, railway };
-}
-
-function microLocationFromModules(modules) {
-  const greenM = modules.green;
-  const waterM = modules.water;
-  const familyM = modules.family;
-  const environmentM = modules.environment;
-  const urbanityM = modules.urbanity;
-
-  const green = greenM.elements;
-  const water = waterM.elements;
-  const family = familyM.elements;
-  const urban = urbanityM.elements;
-  const env = splitEnvironment(environmentM.elements);
 
   const greenDistance = nearestDistance(green);
   const waterDistance = nearestDistance(water);
   const familyDistance = nearestDistance(family);
+  const residentialDistance = nearestDistance(residential);
+  const industrialDistance = nearestDistance(industrial);
+  const majorRoadDistance = nearestDistance(majorRoad);
   const urbanDistance = nearestDistance(urban);
-  const residentialDistance = nearestDistance(env.residential);
-  const industrialDistance = nearestDistance(env.industrial);
-  const commercialDistance = nearestDistance(env.commercial);
-  const majorRoadDistance = nearestDistance(env.majorRoad);
-  const railwayDistance = nearestDistance(env.railway);
 
-  const greenScore = clamp(
-    curveScore(greenDistance, [[250,100],[500,90],[1000,70],[2000,40]], 35)
-    + Math.min(15, countWithin(green, 1000) * 3)
-  );
-  const waterScore = waterDistance == null ? null : curveScore(waterDistance, [[300,100],[750,85],[1500,65],[2000,50]], 50);
-  const familyScore = clamp(
-    curveScore(familyDistance, [[250,100],[500,90],[1000,75],[2000,55]], 38)
-    + Math.min(12, countWithin(family, 1000) * 3)
-  );
+  const greenBase = curveScore(greenDistance, [[250,100],[500,90],[1000,70],[2000,40]], 45);
+  const greenDensityBonus = Math.min(15, countWithin(green, 1000) * 3);
+  const greenScore = clamp(greenBase + greenDensityBonus);
 
-  let environmentScore = 72;
-  const environmentHasEvidence = environmentM.status === "loaded" && environmentM.elements.length > 0;
-  if (residentialDistance != null) environmentScore += residentialDistance <= 500 ? 12 : residentialDistance <= 1000 ? 7 : 3;
-  if (industrialDistance != null) environmentScore -= industrialDistance <= 250 ? 32 : industrialDistance <= 500 ? 22 : industrialDistance <= 1000 ? 11 : 5;
-  if (commercialDistance != null) environmentScore -= commercialDistance <= 150 ? 12 : commercialDistance <= 400 ? 7 : commercialDistance <= 1000 ? 3 : 0;
-  if (majorRoadDistance != null) environmentScore -= majorRoadDistance <= 100 ? 20 : majorRoadDistance <= 250 ? 12 : majorRoadDistance <= 500 ? 6 : 2;
-  if (railwayDistance != null) environmentScore -= railwayDistance <= 75 ? 12 : railwayDistance <= 200 ? 7 : railwayDistance <= 500 ? 3 : 0;
-  environmentScore = clamp(environmentScore);
+  // Gewässer sind ein Bonus, kein Muss. Ohne Gewässer bleibt der Faktor neutral.
+  const waterScore = curveScore(waterDistance, [[300,100],[750,85],[1500,65],[2000,50]], 65);
 
-  let urbanityScore = 35;
-  if (urbanDistance != null) urbanityScore += urbanDistance <= 250 ? 20 : urbanDistance <= 500 ? 15 : urbanDistance <= 1000 ? 10 : 4;
-  urbanityScore += Math.min(30, countWithin(urban, 1000) * 3);
-  urbanityScore = clamp(urbanityScore);
+  const familyBase = curveScore(familyDistance, [[250,100],[500,90],[1000,75],[2000,55]], 45);
+  const familyDensityBonus = Math.min(12, countWithin(family, 1000) * 3);
+  const familyScore = clamp(familyBase + familyDensityBonus);
 
-  const componentRows = [
-    { key: "green", weight: 30, technical: greenM.status === "loaded", active: greenM.status === "loaded", score: greenScore },
-    // Gewässer sind ein Bonus: technisch erfolgreich aber kein Gewässer = kein Malus und kein Score-Gewicht.
-    { key: "water", weight: 15, technical: waterM.status === "loaded", active: waterM.status === "loaded" && waterDistance != null, score: waterScore },
-    { key: "family", weight: 20, technical: familyM.status === "loaded", active: familyM.status === "loaded", score: familyScore },
-    { key: "residential", weight: 25, technical: environmentM.status === "loaded", active: environmentHasEvidence, score: environmentScore },
-    { key: "urbanity", weight: 10, technical: urbanityM.status === "loaded", active: urbanityM.status === "loaded", score: urbanityScore },
-  ];
+  let residentialScore = 70;
+  if (residentialDistance != null) residentialScore += residentialDistance <= 500 ? 12 : residentialDistance <= 1000 ? 6 : 2;
+  if (industrialDistance != null) residentialScore -= industrialDistance <= 250 ? 30 : industrialDistance <= 500 ? 20 : industrialDistance <= 1000 ? 10 : 4;
+  if (majorRoadDistance != null) residentialScore -= majorRoadDistance <= 100 ? 20 : majorRoadDistance <= 250 ? 12 : majorRoadDistance <= 500 ? 6 : 2;
+  residentialScore = clamp(residentialScore);
 
-  const activeWeight = componentRows.filter((row) => row.active && row.score != null).reduce((sum, row) => sum + row.weight, 0);
-  const weighted = componentRows.filter((row) => row.active && row.score != null).reduce((sum, row) => sum + row.score * row.weight, 0);
-  const score = activeWeight > 0 ? Math.round(clamp(weighted / activeWeight)) : null;
-  const technicalWeight = componentRows.filter((row) => row.technical).reduce((sum, row) => sum + row.weight, 0);
-  const dataCoverage = Math.round((technicalWeight / 100) * 100);
+  let urbanScore = 45;
+  if (urbanDistance != null) urbanScore += urbanDistance <= 250 ? 20 : urbanDistance <= 500 ? 15 : urbanDistance <= 1000 ? 10 : 4;
+  urbanScore += Math.min(25, countWithin(urban, 1000) * 4);
+  urbanScore = clamp(urbanScore);
+
+  const score = Math.round(clamp(
+    greenScore * 0.30 +
+    waterScore * 0.15 +
+    familyScore * 0.20 +
+    residentialScore * 0.25 +
+    urbanScore * 0.10
+  ));
 
   const summaryParts = [];
   if (greenDistance != null) summaryParts.push(`Grün/Natur ${Math.round(greenDistance)} m`);
   if (waterDistance != null) summaryParts.push(`Gewässer ${Math.round(waterDistance)} m`);
   if (familyDistance != null) summaryParts.push(`Freizeit ${Math.round(familyDistance)} m`);
-  if (industrialDistance != null && industrialDistance <= 1000) summaryParts.push(`Industrie ${Math.round(industrialDistance)} m`);
+  if (industrialDistance != null && industrialDistance <= 1000) summaryParts.push(`Gewerbe/Industrie ${Math.round(industrialDistance)} m`);
   else if (residentialDistance != null && residentialDistance <= 1000) summaryParts.push("Wohngebiet im Umfeld");
-  if (urbanDistance != null) summaryParts.push(`Dienstleistungen ${Math.round(urbanDistance)} m`);
+  if (majorRoadDistance != null && majorRoadDistance <= 500) summaryParts.push(`Hauptverkehrsachse ${Math.round(majorRoadDistance)} m`);
 
   return {
     score,
-    dataCoverage,
     summary: summaryParts.slice(0, 4).join(" · ") || "Unmittelbares Wohnumfeld analysiert",
     components: {
-      green: { available: greenM.status === "loaded", score: Math.round(greenScore), nearestMeters: greenDistance, count500m: countWithin(green, 500), count1000m: countWithin(green, 1000) },
-      water: { available: waterM.status === "loaded", active: waterDistance != null, score: waterScore == null ? null : Math.round(waterScore), nearestMeters: waterDistance, count1000m: countWithin(water, 1000) },
-      family: { available: familyM.status === "loaded", score: Math.round(familyScore), nearestMeters: familyDistance, count500m: countWithin(family, 500), count1000m: countWithin(family, 1000) },
-      residential: { available: environmentM.status === "loaded", active: environmentHasEvidence, score: environmentHasEvidence ? Math.round(environmentScore) : null, nearestResidentialMeters: residentialDistance, nearestIndustrialMeters: industrialDistance, nearestCommercialMeters: commercialDistance, nearestMajorRoadMeters: majorRoadDistance, nearestRailwayMeters: railwayDistance },
-      urbanity: { available: urbanityM.status === "loaded", score: Math.round(urbanityScore), nearestMeters: urbanDistance, count1000m: countWithin(urban, 1000) },
+      green: { score: Math.round(greenScore), nearestMeters: greenDistance, count500m: countWithin(green, 500), count1000m: countWithin(green, 1000) },
+      water: { score: Math.round(waterScore), nearestMeters: waterDistance, count1000m: countWithin(water, 1000) },
+      family: { score: Math.round(familyScore), nearestMeters: familyDistance, count500m: countWithin(family, 500), count1000m: countWithin(family, 1000) },
+      residential: { score: Math.round(residentialScore), nearestResidentialMeters: residentialDistance, nearestIndustrialMeters: industrialDistance, nearestMajorRoadMeters: majorRoadDistance },
+      urbanity: { score: Math.round(urbanScore), nearestMeters: urbanDistance, count1000m: countWithin(urban, 1000) },
     },
-    moduleStatus: Object.fromEntries(Object.entries(modules).map(([key, module]) => [key, module.status])),
   };
 }
 
 async function fetchMicroLocationProfile(geo) {
-  // V5.3: fünf voneinander unabhängige Mikrolage-Module. Ein Timeout in einem
-  // Teilbereich verwirft nicht mehr die übrigen erfolgreich geladenen Daten.
-  const [green, water, family, environment, urbanity] = await Promise.all([
-    fetchMicroModule(geo, "green", microGreenQuery),
-    fetchMicroModule(geo, "water", microWaterQuery),
-    fetchMicroModule(geo, "family", microFamilyQuery),
-    fetchMicroModule(geo, "environment", microEnvironmentQuery),
-    fetchMicroModule(geo, "urbanity", microUrbanityQuery),
-  ]);
-  const modules = { green, water, family, environment, urbanity };
-  if (!Object.values(modules).some((module) => module.status === "loaded")) {
-    const error = new Error("Alle Mikrolage-Module waren technisch nicht verfügbar.");
-    error.name = "OsmMicroLocationUnavailable";
-    throw error;
-  }
-  const profile = microLocationFromModules(modules);
-  return profile.score == null ? null : profile;
+  const elements = await overpassElements(geo, withCoords(microLocationQuery, geo), 2000, 7600);
+  if (!elements.length) return null;
+  return microLocationFromElements(elements);
 }
 
 function withCoords(builder, geo) {
@@ -1165,7 +1083,7 @@ export default async function handler(req, res) {
     const municipalityBfs = gwr?.municipalityBfs || municipalityParsed.municipalityBfs;
     const transitClass = parseTransitClass(layerMap[LAYERS.transitClass]);
 
-    const [transitD, noiseD, vacancyD, officialSchoolD, shoppingD, osmSchoolD, motorwayD, microD] = await Promise.all([
+    const [transitD, noiseD, vacancyD, officialSchoolD, shoppingD, osmSchoolD, motorwayD] = await Promise.all([
       runDiagnostic("Nächster ÖV-Punkt", "OpenTransportData", () => fetchNearestTransit(geo)),
       runDiagnostic("Lärm Strasse/Bahn Tag+Nacht", "BAFU / BAV via GeoAdmin", () => fetchNoiseBundle(geo)),
       runDiagnostic("Leerwohnungsziffer", "BFS / opendata.swiss", () => fetchVacancyRate(municipalityBfs, municipalityName)),
@@ -1177,7 +1095,6 @@ export default async function handler(req, res) {
         "amenity:school", "amenity:kindergarten", "amenity:childcare", "amenity:college"
       ], [3, 8, 20])),
       runDiagnostic("Autobahnanschluss", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, motorwayQuery, ["highway:motorway_junction"], [10, 25, 50])),
-      runDiagnostic("Mikrolage", "OpenStreetMap / Overpass", () => fetchMicroLocationProfile(geo)),
     ]);
 
     const nearestPublicTransportMeters = transitD.value;
@@ -1212,10 +1129,10 @@ export default async function handler(req, res) {
     const transitClassScore = { A: 95, B: 82, C: 68, D: 54 }[transitClass] || null;
     const vacancyRiskForScore = actual.vacancyRisk ?? 50;
     const municipalityDemand = Math.round(clamp(100 - vacancyRiskForScore * 0.78 + (transitClassScore ? (transitClassScore - 50) * 0.22 : 0)));
-    // V5.3: Mikrolage ist modular und bewusst unabhängig von ÖV, Einkauf, Schule, Lärm und Leerstand.
-    // Sie beschreibt ausschliesslich das unmittelbare Wohnumfeld anhand von OSM-Umgebungsdaten.
-    const microProfile = microD.value;
-    const microLocation = microProfile?.score ?? 50;
+    // V5.3: Mikrolage wird absichtlich NICHT mehr in der Hauptpipeline geladen.
+    // Dadurch kann eine langsame optionale OSM-Umfeldabfrage die stabilen Standortdaten nicht blockieren.
+    const microProfile = null;
+    const microLocation = 50;
 
     const metrics = {
       publicTransportMinutes: actual.publicTransportMinutes ?? 12,
@@ -1247,7 +1164,6 @@ export default async function handler(req, res) {
       shoppingD.diagnostic,
       osmSchoolD.diagnostic,
       motorwayD.diagnostic,
-      microD.diagnostic,
     ];
 
     const body = {
@@ -1279,9 +1195,9 @@ export default async function handler(req, res) {
         nearestShoppingMeters: shoppingMeters,
         nearestSchoolMeters: schoolMeters,
         nearestMotorwayJunctionMeters: motorwayMeters,
-        microLocationAvailable: Boolean(microProfile),
-        microLocationSummary: microProfile?.summary ?? null,
-        microLocationProfile: microProfile ?? null,
+        microLocationAvailable: false,
+        microLocationSummary: null,
+        microLocationProfile: null,
         searchRadiusKm: Math.max(10, radiusBucket(shoppingMeters, [1, 2.5, 5, 10, 15, 20]) || 0, radiusBucket(schoolMeters, [1, 2.5, 5, 10, 15, 20]) || 0, radiusBucket(motorwayMeters, [5, 10, 20, 35, 50]) || 0),
         categoryRadiusKm: {
           transit: nearestPublicTransportMeters == null ? null : Math.max(1, Math.ceil(nearestPublicTransportMeters / 1000)),
@@ -1311,7 +1227,7 @@ export default async function handler(req, res) {
         { name: "BAFU / BAV via GeoAdmin", detail: "Strassen- und Bahnlärm werden getrennt für Tag/Nacht abgefragt. Jeder BAFU-Rasterlayer läuft unabhängig über GeoAdmin WMS GetFeatureInfo; BAV-Eisenbahn-Immissionen zusätzlich über GeoAdmin Identify. Suche am Objekt sowie 25/50/100/250 m. Entfernung reduziert nur den negativen Einfluss, nicht den dB-Wert." },
         { name: "OpenTransportData / transport.opendata.ch", detail: "Nächster ÖV-Servicepunkt" },
         { name: "opendata.swiss", detail: "Offizielle kantonale/kommunale Schul-, Betreuungs- und Leerstandsdaten, sofern maschinenlesbar verfügbar" },
-        { name: "OpenStreetMap", detail: "Einkauf, Schule/Betreuung und Autobahnanschlüsse über Photon/Overpass. Mikrolage modular aus Grün/Natur, Gewässern, Freizeit, Wohnumfeld und lokalen Dienstleistungen im Umkreis bis 2 km; Teilergebnisse bleiben bei einzelnen Quellenausfällen erhalten." },
+        { name: "OpenStreetMap", detail: "Einkauf, Schule/Betreuung und Autobahnanschlüsse über Photon/Overpass. Mikrolage zusätzlich aus Grün/Natur, Gewässern, Freizeit, Wohnumfeld und lokalen Dienstleistungen im Umkreis bis 2 km." },
       ],
     };
 
