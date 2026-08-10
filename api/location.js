@@ -3,6 +3,7 @@ const GEOADMIN_IDENTIFY = "https://api3.geo.admin.ch/rest/services/ech/MapServer
 const PXWEB_VACANCY = "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0902020300_101/px-x-0902020300_101/px-x-0902020300_101.px";
 const TRANSPORT_LOCATIONS = "https://transport.opendata.ch/v1/locations";
 const OPENDATA_SEARCH = "https://ckan.opendata.swiss/api/3/action/package_search";
+const PHOTON_API = "https://photon.komoot.io";
 const OVERPASS_ENDPOINTS = [
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass-api.de/api/interpreter",
@@ -15,6 +16,7 @@ const LAYERS = {
   transitClass: "ch.are.gueteklassen_oev",
   roadNoise: "ch.bafu.laerm-strassenlaerm_tag",
   railNoise: "ch.bafu.laerm-bahnlaerm_tag",
+  railNoiseEffective: "ch.bav.laermbelastung-eisenbahn_effektive_immissionen_tag",
 };
 
 let vacancyMetadataCache = null;
@@ -41,7 +43,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4200) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/4.5 (official-data-first Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/4.6 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -61,7 +63,7 @@ async function fetchText(url, options = {}, timeoutMs = 3500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,application/geo+json,application/json,*/*",
-        "User-Agent": "HomeIQ-Invest/4.5 (official-data-first Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/4.6 (hybrid official-data + OSM POI Swiss real-estate analysis)",
         ...(options.headers || {}),
       },
     });
@@ -254,13 +256,58 @@ async function overpassNearest(geo, queryBody, maxRadiusMeters, timeoutMs = 4200
   return Number.isFinite(nearest) ? Math.round(nearest) : null;
 }
 
+async function photonNearestByTags(geo, tags, radiusKm, timeoutMs = 5200) {
+  const requests = tags.map((tag) => {
+    const params = new URLSearchParams({
+      lon: String(geo.lon),
+      lat: String(geo.lat),
+      radius: String(radiusKm),
+      limit: "10",
+      lang: "de",
+      osm_tag: tag,
+    });
+    return fetchJson(`${PHOTON_API}/reverse?${params}`, {}, timeoutMs);
+  });
+  const settled = await Promise.allSettled(requests);
+  let nearest = Infinity;
+  for (const entry of settled) {
+    if (entry.status !== "fulfilled") continue;
+    for (const feature of entry.value.features || []) {
+      const coords = feature.geometry?.coordinates;
+      if (!Array.isArray(coords) || coords.length < 2) continue;
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const distance = haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon });
+      if (distance <= radiusKm * 1000) nearest = Math.min(nearest, distance);
+    }
+  }
+  return Number.isFinite(nearest) ? Math.round(nearest) : null;
+}
+
+async function nearestWithOsmFallback(geo, overpassBuilder, photonTags, radiiKm) {
+  for (const radiusKm of radiiKm) {
+    // Fast indexed OSM geocoder first; public Overpass remains a second independent OSM path.
+    try {
+      const photon = await photonNearestByTags(geo, photonTags, radiusKm, 5200);
+      if (photon != null) return { meters: photon, source: "OpenStreetMap / Photon" };
+    } catch {}
+    try {
+      const overpass = await overpassNearest(geo, withCoords(overpassBuilder, geo), radiusKm * 1000, 7200);
+      if (overpass != null) return { meters: overpass, source: "OpenStreetMap / Overpass" };
+    } catch {}
+  }
+  return null;
+}
+
 const retailQuery = (r) => `
   nwr(around:${r},{{LAT}},{{LON}})[shop~"supermarket|convenience|grocery|general|department_store|mall"];
   nwr(around:${r},{{LAT}},{{LON}})[amenity=marketplace];`;
 const schoolQuery = (r) => `
   nwr(around:${r},{{LAT}},{{LON}})[amenity~"school|kindergarten|childcare"];
   nwr(around:${r},{{LAT}},{{LON}})[social_facility~"childcare|day_care"];
-  nwr(around:${r},{{LAT}},{{LON}})[office=educational_institution];`;
+  nwr(around:${r},{{LAT}},{{LON}})[office=educational_institution];
+  nwr(around:${r},{{LAT}},{{LON}})[amenity=college];`;
 const motorwayQuery = (r) => `nwr(around:${r},{{LAT}},{{LON}})[highway=motorway_junction];`;
 
 function withCoords(builder, geo) {
@@ -288,17 +335,39 @@ function parseCsv(text) {
   return lines.slice(1).map((line) => Object.fromEntries(split(line).map((value, i) => [headers[i] || `c${i}`, value])));
 }
 
+function swissGridToWgs84(easting, northing) {
+  // swisstopo approximate formulas. Accept both LV95 (2.6m/1.2m) and LV03 (600k/200k).
+  let y = Number(easting);
+  let x = Number(northing);
+  if (!Number.isFinite(y) || !Number.isFinite(x)) return null;
+  if (y > 2000000) y -= 2000000;
+  if (x > 1000000) x -= 1000000;
+  const yAux = (y - 600000) / 1000000;
+  const xAux = (x - 200000) / 1000000;
+  const latSec = 16.9023892 + 3.238272 * xAux - 0.270978 * yAux ** 2 - 0.002528 * xAux ** 2 - 0.0447 * yAux ** 2 * xAux - 0.0140 * xAux ** 3;
+  const lonSec = 2.6779094 + 4.728982 * yAux + 0.791484 * yAux * xAux + 0.1306 * yAux * xAux ** 2 - 0.0436 * yAux ** 3;
+  const lat = latSec * 100 / 36;
+  const lon = lonSec * 100 / 36;
+  return lat >= 45 && lat <= 48.5 && lon >= 5 && lon <= 11 ? { lat, lon } : null;
+}
+
 function coordFromRecord(record) {
   let lat = null;
   let lon = null;
+  let easting = null;
+  let northing = null;
   for (const [key, raw] of Object.entries(record || {})) {
     const k = key.toLowerCase();
-    const n = Number(String(raw).replace(",", "."));
+    const n = Number(String(raw).replace(/[’']/g, "").replace(",", "."));
     if (!Number.isFinite(n)) continue;
     if (lat == null && /(^|_)(lat|latitude|breite|y_wgs)/.test(k) && n >= 45 && n <= 48.5) lat = n;
     if (lon == null && /(^|_)(lon|lng|longitude|laenge|länge|x_wgs)/.test(k) && n >= 5 && n <= 11) lon = n;
+    if (easting == null && /(easting|ostwert|rechtswert|koord[_ -]?x|(^|_)x($|_))/i.test(k) && ((n >= 400000 && n <= 900000) || (n >= 2400000 && n <= 2900000))) easting = n;
+    if (northing == null && /(northing|nordwert|hochwert|koord[_ -]?y|(^|_)y($|_))/i.test(k) && ((n >= 0 && n <= 400000) || (n >= 1000000 && n <= 1400000))) northing = n;
   }
-  return lat != null && lon != null ? { lat, lon } : null;
+  if (lat != null && lon != null) return { lat, lon };
+  if (easting != null && northing != null) return swissGridToWgs84(easting, northing);
+  return null;
 }
 
 function coordsFromJson(payload) {
@@ -491,25 +560,31 @@ export default async function handler(req, res) {
     const municipalityBfs = gwr?.municipalityBfs || municipalityParsed.municipalityBfs;
     const transitClass = parseTransitClass(layerMap[LAYERS.transitClass]);
 
-    const [transitD, roadNoiseD, railNoiseD, vacancyD, officialSchoolD, osmShoppingD, osmSchoolD, motorwayD] = await Promise.all([
+    const [transitD, roadNoiseD, railNoiseBafuD, railNoiseEffectiveD, vacancyD, officialSchoolD, shoppingD, osmSchoolD, motorwayD] = await Promise.all([
       runDiagnostic("Nächster ÖV-Punkt", "OpenTransportData", () => fetchNearestTransit(geo)),
       runDiagnostic("Strassenlärm", "BAFU / GeoAdmin", () => identifyNoiseAdaptive(LAYERS.roadNoise, geo).then(parseNoiseDb)),
-      runDiagnostic("Bahnlärm", "BAFU / GeoAdmin", () => identifyNoiseAdaptive(LAYERS.railNoise, geo).then(parseNoiseDb)),
+      runDiagnostic("Bahnlärm BAFU", "BAFU / GeoAdmin", () => identifyNoiseAdaptive(LAYERS.railNoise, geo).then(parseNoiseDb)),
+      runDiagnostic("Bahnlärm effektiv", "BAV / GeoAdmin", () => identifyNoiseAdaptive(LAYERS.railNoiseEffective, geo).then(parseNoiseDb)),
       runDiagnostic("Leerwohnungsziffer", "BFS / opendata.swiss", () => fetchVacancyRate(municipalityBfs, municipalityName)),
       runDiagnostic("Schule / Betreuung (offiziell)", "opendata.swiss", () => fetchOfficialEducationPoi(geo, municipalityName)),
-      runDiagnostic("Einkauf", "OpenStreetMap", () => overpassNearest(geo, withCoords(retailQuery, geo), 20000, 4300)),
-      runDiagnostic("Schule / Betreuung (OSM)", "OpenStreetMap", () => overpassNearest(geo, withCoords(schoolQuery, geo), 20000, 4300)),
-      runDiagnostic("Autobahnanschluss", "OpenStreetMap", () => overpassNearest(geo, withCoords(motorwayQuery, geo), 50000, 4300)),
+      runDiagnostic("Einkauf", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, retailQuery, [
+        "shop:supermarket", "shop:convenience", "shop:department_store", "shop:mall", "amenity:marketplace"
+      ], [3, 8, 20])),
+      runDiagnostic("Schule / Betreuung (OSM)", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, schoolQuery, [
+        "amenity:school", "amenity:kindergarten", "amenity:childcare", "amenity:college"
+      ], [3, 8, 20])),
+      runDiagnostic("Autobahnanschluss", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, motorwayQuery, ["highway:motorway_junction"], [10, 25, 50])),
     ]);
 
     const nearestPublicTransportMeters = transitD.value;
     const roadNoiseDb = roadNoiseD.value;
-    const railNoiseDb = railNoiseD.value;
+    const railNoiseDb = railNoiseEffectiveD.value ?? railNoiseBafuD.value;
     const maxNoiseDb = Math.max(roadNoiseDb || 0, railNoiseDb || 0) || null;
     const vacancy = vacancyD.value;
-    const schoolMeters = officialSchoolD.value ?? osmSchoolD.value;
-    const shoppingMeters = osmShoppingD.value;
-    const motorwayMeters = motorwayD.value;
+    const schoolOsmResult = osmSchoolD.value;
+    const schoolMeters = officialSchoolD.value ?? schoolOsmResult?.meters ?? null;
+    const shoppingMeters = shoppingD.value?.meters ?? null;
+    const motorwayMeters = motorwayD.value?.meters ?? null;
 
     const actual = {
       publicTransportMinutes: walkingMinutes(nearestPublicTransportMeters),
@@ -556,9 +631,10 @@ export default async function handler(req, res) {
       transitD.diagnostic,
       vacancyD.diagnostic,
       roadNoiseD.diagnostic,
-      railNoiseD.diagnostic,
+      railNoiseBafuD.diagnostic,
+      railNoiseEffectiveD.diagnostic,
       officialSchoolD.diagnostic,
-      osmShoppingD.diagnostic,
+      shoppingD.diagnostic,
       osmSchoolD.diagnostic,
       motorwayD.diagnostic,
     ];
@@ -584,7 +660,10 @@ export default async function handler(req, res) {
           school: radiusBucket(schoolMeters, [1, 2.5, 5, 10, 15, 20]),
           motorway: radiusBucket(motorwayMeters, [5, 10, 20, 35, 50]),
         },
-        educationSource: officialSchoolD.value != null ? "opendata.swiss" : osmSchoolD.value != null ? "OpenStreetMap" : null,
+        educationSource: officialSchoolD.value != null ? "opendata.swiss" : schoolOsmResult?.source ?? null,
+        shoppingSource: shoppingD.value?.source ?? null,
+        motorwaySource: motorwayD.value?.source ?? null,
+        noiseSource: maxNoiseDb != null ? (railNoiseEffectiveD.value != null ? "BAV / GeoAdmin" : "BAFU / GeoAdmin") : null,
         vacancySource: vacancy?.source ?? null,
       },
       market: {
@@ -600,10 +679,10 @@ export default async function handler(req, res) {
         { name: "swisstopo / GeoAdmin", detail: "Amtliche Adresse, Gemeinde und Gebäudeverknüpfung" },
         { name: "Bundesamt für Statistik BFS", detail: "GWR und Leerwohnungsziffer; Gemeinde wird über die BFS-Nummer zugeordnet" },
         { name: "Bundesamt für Raumentwicklung ARE", detail: "ÖV-Güteklasse" },
-        { name: "Bundesamt für Umwelt BAFU", detail: "Strassen- und Bahnlärm direkt am Objektstandort mit räumlichem Fallback" },
+        { name: "BAFU / BAV via GeoAdmin", detail: "Strassenlärm sowie effektive Eisenbahnlärm-Immissionen direkt am Objektstandort mit räumlichem Fallback" },
         { name: "OpenTransportData / transport.opendata.ch", detail: "Nächster ÖV-Servicepunkt" },
         { name: "opendata.swiss", detail: "Offizielle kantonale/kommunale Schul-, Betreuungs- und Leerstandsdaten, sofern maschinenlesbar verfügbar" },
-        { name: "OpenStreetMap", detail: "Einkauf sowie POI-Fallback für Schule/Betreuung und Autobahnanschlüsse; Kategorien werden getrennt abgefragt" },
+        { name: "OpenStreetMap", detail: "Einkauf, Schule/Betreuung und Autobahnanschlüsse über zwei unabhängige OSM-Zugriffswege (Photon und Overpass), mit gestaffelten Radien" },
       ],
     };
 

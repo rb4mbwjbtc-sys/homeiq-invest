@@ -92,6 +92,9 @@ export type OpenDataLocationReport = {
       motorway: number | null;
     };
     educationSource?: string | null;
+    shoppingSource?: string | null;
+    motorwaySource?: string | null;
+    noiseSource?: string | null;
     vacancySource?: string | null;
   };
   quality: "hoch" | "mittel" | "eingeschränkt";
