@@ -753,3 +753,10 @@ img,svg,iframe{max-width:100%}
 
 /* PDF must use exactly the same computed values as the web report; only the layout is condensed. */
 .print-report.pdf-capture .print-location-score small{display:block;margin-top:2px;font-size:7px!important;color:#637a73}
+
+/* HomeIQ V4.5 – Official-data-first diagnostics */
+.source-diagnostics{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;margin:8px 0;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#f7fbf9}
+.source-diagnostics>strong{grid-column:1/-1;font-size:11px;color:var(--text)}
+.source-diagnostics span{font-size:10px;color:var(--muted)}
+.source-diagnostics .diag-loaded{color:#14765f}.source-diagnostics .diag-not_found{color:#8b6a28}.source-diagnostics .diag-timeout,.source-diagnostics .diag-error{color:#a6422f}
+@media(max-width:650px){.source-diagnostics{grid-template-columns:1fr}}

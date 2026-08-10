@@ -10,7 +10,7 @@ export function Settings() {
         <div><span>Sprache</span><strong>Deutsch (Schweiz)</strong></div>
         <div><span>Währung</span><strong>CHF</strong></div>
         <div><span>Datenregion</span><strong>Schweiz</strong></div>
-        <div><span>Version</span><strong>Independent V4.4 · Reliable Swiss Data Pipeline</strong></div>
+        <div><span>Version</span><strong>Independent V4.5 · Official Data First</strong></div>
       </section>
     </div>
   );

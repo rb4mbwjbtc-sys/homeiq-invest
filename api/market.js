@@ -18,7 +18,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4000) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/4.4 (Swiss market data gateway)",
+        "User-Agent": "HomeIQ-Invest/4.5 (Swiss market data gateway)",
         ...(options.headers || {}),
       },
     });
@@ -38,7 +38,7 @@ async function fetchText(url, options = {}, timeoutMs = 4000) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,*/*",
-        "User-Agent": "HomeIQ-Invest/4.4 (Swiss market data gateway)",
+        "User-Agent": "HomeIQ-Invest/4.5 (Swiss market data gateway)",
         ...(options.headers || {}),
       },
     });

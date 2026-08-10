@@ -280,7 +280,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V4.4</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V4.5</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -657,9 +657,9 @@ export function NewAnalysis() {
                 <div><span>ÖV-Güteklasse</span><strong>{form.openDataLocation.evidence.transitClass || "nicht verfügbar"}</strong></div>
                 <div><span>Nächster ÖV-Punkt</span><strong>{form.openDataLocation.evidence.nearestPublicTransportMeters !== null ? `${form.openDataLocation.evidence.nearestPublicTransportMeters} m` : "nicht verfügbar"}</strong></div>
                 <div><span>Einkauf</span><strong>{form.openDataLocation.evidence.nearestShoppingMeters !== null ? `${form.openDataLocation.evidence.nearestShoppingMeters} m` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.categoryRadiusKm?.shopping ? `gefunden bis ${form.openDataLocation.evidence.categoryRadiusKm.shopping} km` : ""}</small></div>
-                <div><span>Schule / Betreuung</span><strong>{form.openDataLocation.evidence.nearestSchoolMeters !== null ? `${form.openDataLocation.evidence.nearestSchoolMeters} m` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.categoryRadiusKm?.school ? `gefunden bis ${form.openDataLocation.evidence.categoryRadiusKm.school} km` : ""}</small></div>
+                <div><span>Schule / Betreuung</span><strong>{form.openDataLocation.evidence.nearestSchoolMeters !== null ? `${form.openDataLocation.evidence.nearestSchoolMeters} m` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.educationSource ? `${form.openDataLocation.evidence.educationSource}${form.openDataLocation.evidence.categoryRadiusKm?.school ? ` · bis ${form.openDataLocation.evidence.categoryRadiusKm.school} km` : ""}` : ""}</small></div>
                 <div><span>Autobahnanschluss</span><strong>{form.openDataLocation.evidence.nearestMotorwayJunctionMeters !== null ? `${form.openDataLocation.evidence.nearestMotorwayJunctionMeters} m` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.categoryRadiusKm?.motorway ? `gefunden bis ${form.openDataLocation.evidence.categoryRadiusKm.motorway} km` : ""}</small></div>
-                <div><span>Leerwohnungsziffer</span><strong>{form.openDataLocation.evidence.vacancyRate !== null ? `${form.openDataLocation.evidence.vacancyRate.toFixed(2)} %` : "nicht verfügbar"}</strong></div>
+                <div><span>Leerwohnungsziffer</span><strong>{form.openDataLocation.evidence.vacancyRate !== null ? `${form.openDataLocation.evidence.vacancyRate.toFixed(2)} %` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.vacancySource || ""}</small></div>
                 <div><span>Lärm</span><strong>{Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0) ? `${Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0)} dB` : "nicht verfügbar"}</strong></div>
                 <div><span>Gebäude</span><strong>{form.openDataLocation.building?.constructionYear ? `Baujahr ${form.openDataLocation.building.constructionYear}` : form.openDataLocation.building?.egid ? `EGID ${form.openDataLocation.building.egid}` : "nicht verfügbar"}</strong></div>
               </div>
@@ -676,6 +676,16 @@ export function NewAnalysis() {
                   <div key={`${tier.tier}-${tier.name}`}><strong>Ebene {tier.tier}: {tier.name}</strong><span>{tier.detail}</span></div>
                 ))}
                 {form.openDataLocation.sources.map((source) => <div key={source.name}><strong>{source.name}</strong><span>{source.detail}</span></div>)}
+                {(form.openDataLocation.diagnostics || []).length > 0 && (
+                  <div className="source-diagnostics">
+                    <strong>Technischer Quellenstatus</strong>
+                    {(form.openDataLocation.diagnostics || []).map((item) => (
+                      <span key={`${item.name}-${item.source}`} className={`diag-${item.status}`}>
+                        {item.name}: {item.status === "loaded" ? "geladen" : item.status === "not_found" ? "kein Treffer" : item.status === "timeout" ? "Timeout" : "Fehler"}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <small>Geladen am {new Date(form.openDataLocation.loadedAt).toLocaleString("de-CH")}</small>
               </details>
             </section>
@@ -686,19 +696,6 @@ export function NewAnalysis() {
                 <span className="eyebrow">MARKTDATEN</span>
                 <h3>Marktwert und Marktmiete</h3>
                 <p>HomeIQ verwendet nur belastbare gefundene Benchmarks. Nicht verfügbare Werte werden nicht ersetzt oder geschätzt.</p>
-              </div>
-
-              <div className="clean-market-summary">
-                <div className={form.openDataLocation.market?.pricePerSqm ? "available" : "unavailable"}>
-                  <span>Marktpreis-Benchmark</span>
-                  <strong>{form.openDataLocation.market?.pricePerSqm != null ? `CHF ${form.openDataLocation.market.pricePerSqm.toLocaleString("de-CH")} / m²` : "Nicht verfügbar"}</strong>
-                  <small>{form.openDataLocation.market?.priceSource || "Keine ausreichend belastbaren öffentlichen Vergleichsdaten gefunden."}</small>
-                </div>
-                <div className={form.openDataLocation.market?.rentPerSqm ? "available" : "unavailable"}>
-                  <span>Marktmiet-Benchmark</span>
-                  <strong>{form.openDataLocation.market?.rentPerSqm != null ? `CHF ${form.openDataLocation.market.rentPerSqm.toFixed(2)} / m² / Monat` : "Nicht verfügbar"}</strong>
-                  <small>{form.openDataLocation.market?.rentSource || "Keine ausreichend belastbaren öffentlichen Mietdaten gefunden."}</small>
-                </div>
               </div>
 
               <div className="premium-action market-location-action">

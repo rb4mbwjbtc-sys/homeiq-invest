@@ -50,6 +50,14 @@ export type OpenDataMarketReport = {
   note: string;
 };
 
+export type OpenDataDiagnostic = {
+  name: string;
+  source: string;
+  status: "loaded" | "not_found" | "timeout" | "error";
+  durationMs: number;
+  detail?: string;
+};
+
 export type OpenDataLocationReport = {
   address: {
     formatted: string;
@@ -83,11 +91,14 @@ export type OpenDataLocationReport = {
       school: number | null;
       motorway: number | null;
     };
+    educationSource?: string | null;
+    vacancySource?: string | null;
   };
   quality: "hoch" | "mittel" | "eingeschränkt";
   missing: string[];
   loadedAt: string;
   sources: OpenDataSource[];
+  diagnostics?: OpenDataDiagnostic[];
   market: OpenDataMarketReport;
 };
 
