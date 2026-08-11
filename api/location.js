@@ -2,7 +2,13 @@ const GEOADMIN_SEARCH = "https://api3.geo.admin.ch/rest/services/ech/SearchServe
 const GEOADMIN_IDENTIFY = "https://api3.geo.admin.ch/rest/services/ech/MapServer/identify";
 const GEOADMIN_WMS = "https://wms.geo.admin.ch/";
 const PXWEB_VACANCY = "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0902020300_101/px-x-0902020300_101/px-x-0902020300_101.px";
-const PXWEB_POPULATION_SERIES = "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0102010000_103/px-x-0102010000_103/px-x-0102010000_103.px";
+const PXWEB_POPULATION_SERIES_ENDPOINTS = [
+  // Aktueller offizieller STATPOP-Gemeinde-Zeitreihen-Cube (2010–2024).
+  // Der Zwischenpfad "-" ist Teil des BFS-PxWeb-Endpunkts.
+  "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0102010000_104/-/px-x-0102010000_104.px",
+  // Fallback auf den Vorgänger-Cube, falls BFS den aktuellen Cube temporär nicht liefert.
+  "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0102010000_103/px-x-0102010000_103/px-x-0102010000_103.px",
+];
 const TRANSPORT_LOCATIONS = "https://transport.opendata.ch/v1/locations";
 const OPENDATA_SEARCH = "https://ckan.opendata.swiss/api/3/action/package_search";
 const PHOTON_API = "https://photon.komoot.io";
@@ -25,7 +31,7 @@ const LAYERS = {
 };
 
 let vacancyMetadataCache = null;
-let populationSeriesMetadataCache = null;
+const populationSeriesMetadataCache = new Map();
 const memoryCache = new Map();
 
 const json = (res, status, body) => {
@@ -49,7 +55,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4200) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/5.5.2 (STATPOP municipality time-series bugfix)",
+        "User-Agent": "HomeIQ-Invest/5.5.3 (STATPOP metadata-first bugfix)",
         ...(options.headers || {}),
       },
     });
@@ -69,7 +75,7 @@ async function fetchText(url, options = {}, timeoutMs = 3500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,application/geo+json,application/json,*/*",
-        "User-Agent": "HomeIQ-Invest/5.5.2 (STATPOP municipality time-series bugfix)",
+        "User-Agent": "HomeIQ-Invest/5.5.3 (STATPOP metadata-first bugfix)",
         ...(options.headers || {}),
       },
     });
@@ -1136,7 +1142,7 @@ async function fetchPopulationValuesPxWeb(metadata, municipalityBfs, municipalit
     return { code: variable.code, selection: { filter: "item", values: [variable.values[idx]] } };
   });
 
-  const data = await fetchJson(PXWEB_POPULATION_SERIES, {
+  const data = await fetchJson(metadata.__endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, response: { format: "json-stat2" } }),
@@ -1156,41 +1162,55 @@ async function fetchPopulationValuesPxWeb(metadata, municipalityBfs, municipalit
 }
 
 async function fetchPopulationGrowthPxWeb(municipalityBfs, municipalityName) {
-  // V5.5.2 bugfix: use ONE official STATPOP municipality time-series cube
-  // containing 2010–2024. This avoids cross-table municipality-code mismatches.
-  if (!populationSeriesMetadataCache) populationSeriesMetadataCache = await fetchJson(PXWEB_POPULATION_SERIES, {}, 5200);
+  // V5.5.3: Metadata-first. Wir lesen zuerst die tatsächlichen Dimensionen und
+  // Gemeinde-Codes des aktuellen BFS-Cubes und senden erst danach die Datenabfrage.
+  // Dadurch hängt HomeIQ nicht von vermuteten PxWeb-Codes ab.
+  for (const endpoint of PXWEB_POPULATION_SERIES_ENDPOINTS) {
+    try {
+      let metadata = populationSeriesMetadataCache.get(endpoint);
+      if (!metadata) {
+        metadata = await fetchJson(endpoint, {}, 6000);
+        metadata.__endpoint = endpoint;
+        populationSeriesMetadataCache.set(endpoint, metadata);
+      }
 
-  const yearVar = (populationSeriesMetadataCache.variables || []).find((v) => /jahr|year/i.test(`${v.code} ${v.text}`));
-  const availableYears = (yearVar?.valueTexts || yearVar?.values || [])
-    .map((value) => Number(String(value).match(/\d{4}/)?.[0]))
-    .filter(Number.isFinite)
-    .sort((a, b) => a - b);
-  if (!availableYears.length) return null;
+      const yearVar = (metadata.variables || []).find((v) => /jahr|year/i.test(`${v.code} ${v.text}`));
+      const availableYears = (yearVar?.valueTexts || yearVar?.values || [])
+        .map((value) => Number(String(value).match(/\d{4}/)?.[0]))
+        .filter(Number.isFinite)
+        .sort((a, b) => a - b);
+      if (!availableYears.length) continue;
 
-  const endYear = availableYears[availableYears.length - 1];
-  const startYear = endYear - 5;
-  if (!availableYears.includes(startYear)) return null;
+      const endYear = availableYears[availableYears.length - 1];
+      const startYear = endYear - 5;
+      if (!availableYears.includes(startYear)) continue;
 
-  const populations = await fetchPopulationValuesPxWeb(
-    populationSeriesMetadataCache,
-    municipalityBfs,
-    municipalityName,
-    [startYear, endYear],
-  );
-  const startPopulation = populations?.[startYear];
-  const endPopulation = populations?.[endYear];
-  if (!startPopulation || !endPopulation) return null;
+      const populations = await fetchPopulationValuesPxWeb(
+        metadata,
+        municipalityBfs,
+        municipalityName,
+        [startYear, endYear],
+      );
+      const startPopulation = populations?.[startYear];
+      const endPopulation = populations?.[endYear];
+      if (!startPopulation || !endPopulation) continue;
 
-  const growthPercent = ((endPopulation / startPopulation) - 1) * 100;
-  return {
-    growthPercent,
-    score: Math.round(clamp(populationGrowthScore(growthPercent))),
-    startYear: String(startYear),
-    endYear: String(endYear),
-    startPopulation: Math.round(startPopulation),
-    endPopulation: Math.round(endPopulation),
-    source: "BFS STATPOP / PxWeb",
-  };
+      const growthPercent = ((endPopulation / startPopulation) - 1) * 100;
+      return {
+        growthPercent,
+        score: Math.round(clamp(populationGrowthScore(growthPercent))),
+        startYear: String(startYear),
+        endYear: String(endYear),
+        startPopulation: Math.round(startPopulation),
+        endPopulation: Math.round(endPopulation),
+        source: "BFS STATPOP / PxWeb",
+      };
+    } catch {
+      // Nur diesen STATPOP-Endpunkt verwerfen; die bestehende Standortpipeline
+      // und alle anderen Datenquellen bleiben unangetastet.
+    }
+  }
+  return null;
 }
 
 function vacancyRiskScore(rate) {
