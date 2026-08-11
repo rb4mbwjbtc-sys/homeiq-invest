@@ -62,6 +62,22 @@ async function loadMarketOptional(url: string): Promise<OpenDataMarketReport> {
   }
 }
 
+
+export async function lookupSwissCityByPostalCode(postalCode: string): Promise<string | null> {
+  const value = postalCode.trim();
+  if (!/^\d{4}$/.test(value)) return null;
+  try {
+    const payload = await fetchJsonWithTimeout<{ city?: string | null }>(
+      `/api/location?lookupPostalCode=${encodeURIComponent(value)}`,
+      5000,
+    );
+    return payload.city?.trim() || null;
+  } catch {
+    // Die automatische Ortsauflösung ist Komfortfunktion und darf die Eingabe nie blockieren.
+    return null;
+  }
+}
+
 export async function loadSwissOpenDataLocation(
   input: Pick<AnalysisInput, "street" | "postalCode" | "city" | "propertyType" | "rooms" | "livingArea">,
 ): Promise<LocationApiResponse> {

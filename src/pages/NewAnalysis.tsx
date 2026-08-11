@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Building2,
@@ -17,7 +17,7 @@ import type { AnalysisInput, PropertyType, RentalUnit } from "../types";
 import { findAnalysis, saveAnalysis } from "../lib/storage";
 import { analyseLocation, analyseMarket } from "../lib/market";
 import { money } from "../lib/format";
-import { loadSwissOpenDataLocation } from "../lib/locationOpenData";
+import { loadSwissOpenDataLocation, lookupSwissCityByPostalCode } from "../lib/locationOpenData";
 
 const objectTypes = [
   { id: "wohnung", label: "Eigentumswohnung", icon: Building2 },
@@ -26,6 +26,11 @@ const objectTypes = [
   { id: "reihenhaus", label: "Reihenhaus", icon: Rows3 },
   { id: "mfh", label: "Mehrfamilienhaus", icon: Landmark },
 ] as const;
+
+const formatRooms = (rooms: number) => {
+  if (!rooms || rooms <= 0) return "";
+  return `${Number.isInteger(rooms) ? rooms.toFixed(0) : rooms.toFixed(1)} Zimmer`;
+};
 
 const features = [
   "Balkon",
@@ -119,6 +124,36 @@ export function NewAnalysis() {
     () => objectTypes.find((item) => item.id === form.propertyType)?.label,
     [form.propertyType],
   );
+
+  const generatedTitle = useMemo(() => {
+    const type = selectedLabel || "Immobilie";
+    const place = form.city.trim();
+    const street = form.street.trim();
+    if (form.propertyType === "mfh") {
+      const units = form.rentalUnits.length > 0 ? `${form.rentalUnits.length} Wohnungen` : "";
+      return [type, place, units, street].filter(Boolean).join(" · ");
+    }
+    return [type, place, formatRooms(form.rooms), street].filter(Boolean).join(" · ");
+  }, [selectedLabel, form.city, form.street, form.rooms, form.propertyType, form.rentalUnits.length]);
+
+  useEffect(() => {
+    const postalCode = form.postalCode.trim();
+    if (!/^\d{4}$/.test(postalCode)) return;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      const city = await lookupSwissCityByPostalCode(postalCode);
+      if (!active || !city) return;
+      setForm((previous) => {
+        if (previous.postalCode.trim() !== postalCode || previous.city.trim() === city) return previous;
+        return { ...previous, city, openDataLocation: null };
+      });
+      setLocationLoaded(false);
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [form.postalCode]);
 
   const calculationInput = useMemo(() => {
     if (form.propertyType !== "mfh") return form;
@@ -256,7 +291,7 @@ export function NewAnalysis() {
 
   const submit = () => {
     const id = editId || crypto.randomUUID();
-    const title = form.title.trim() || `${selectedLabel} ${form.city || "ohne Ort"}`;
+    const title = generatedTitle || `${selectedLabel || "Immobilie"} ${form.city || "ohne Ort"}`;
     const monthlyRent =
       form.propertyType === "mfh"
         ? form.rentalUnits.reduce((sum, unit) => sum + unit.currentMonthlyRent, 0)
@@ -282,7 +317,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.6</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.7.1</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -331,14 +366,6 @@ export function NewAnalysis() {
           <h2>Objekt und Ausstattung</h2>
           <div className="form-grid">
             <label className="full">
-              Bezeichnung
-              <input
-                value={form.title}
-                onChange={(event) => set("title", event.target.value)}
-                placeholder="z. B. 3.5-Zimmer-Wohnung Bern"
-              />
-            </label>
-            <label className="full">
               Strasse und Nr.
               <input value={form.street} onChange={(event) => { set("street", event.target.value); setLocationLoaded(false); set("openDataLocation", null); }} />
             </label>
@@ -357,6 +384,7 @@ export function NewAnalysis() {
               Ort
               <input
                 value={form.city}
+                placeholder="Wird aus der PLZ ergänzt"
                 onChange={(event) => {
                   set("city", event.target.value);
                   setLocationLoaded(false);

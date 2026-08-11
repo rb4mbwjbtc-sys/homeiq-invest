@@ -1,4 +1,5 @@
 const GEOADMIN_SEARCH = "https://api3.geo.admin.ch/rest/services/ech/SearchServer";
+const GEOADMIN_LOCATION_SEARCH = "https://api3.geo.admin.ch/rest/services/api/SearchServer";
 const GEOADMIN_IDENTIFY = "https://api3.geo.admin.ch/rest/services/ech/MapServer/identify";
 const GEOADMIN_WMS = "https://wms.geo.admin.ch/";
 const PXWEB_VACANCY = "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0902020300_101/px-x-0902020300_101/px-x-0902020300_101.px";
@@ -108,6 +109,35 @@ async function runDiagnostic(name, source, fn) {
       },
     };
   }
+}
+
+async function lookupCityByPostalCode(postalCode) {
+  const value = String(postalCode || "").trim();
+  if (!/^\d{4}$/.test(value)) return null;
+  const params = new URLSearchParams({
+    searchText: value,
+    type: "locations",
+    origins: "zipcode",
+    sr: "2056",
+    limit: "20",
+  });
+  const payload = await fetchJson(`${GEOADMIN_LOCATION_SEARCH}?${params}`, {}, 4200);
+  const candidates = payload.results || [];
+  const exact = candidates.find((item) => {
+    const label = cleanLabel(item.attrs?.label || "");
+    return new RegExp(`(^|\\s)${value}(\\s|$)`).test(label);
+  }) || candidates[0];
+  if (!exact) return null;
+  const label = cleanLabel(exact.attrs?.label || "");
+  // GeoAdmin ZIP-origin labels normally contain “PLZ Ort”. Remove the PLZ
+  // and optional canton/markup suffixes, while preserving multi-word place names.
+  let city = label.replace(new RegExp(`^.*?${value}\\s*`), "").trim();
+  city = city.replace(/\s*[-–|].*$/, "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+  if (!city) {
+    const detail = cleanLabel(exact.attrs?.detail || "");
+    city = detail.replace(new RegExp(`^.*?${value}\\s*`), "").trim();
+  }
+  return city || null;
 }
 
 async function geocodeAddress(street, postalCode, city) {
@@ -648,16 +678,25 @@ async function retryNullable(fn, attempts = 2, delayMs = 180) {
   return { value: null, hadSuccessfulRequest: lastError == null, lastError };
 }
 
-async function nearestWithOsmFallback(geo, overpassBuilder, photonTags, radiiKm) {
+function plausiblePoiDistance(meters, minimumMeters = 25) {
+  if (meters == null || !Number.isFinite(Number(meters))) return null;
+  // OSM point/centroid coordinates can coincide with a building entrance and
+  // produce artificial 0–5 m distances. For walkable POIs we report a
+  // conservative minimum distance without changing the “very close” score.
+  return Math.max(minimumMeters, Math.round(Number(meters)));
+}
+
+async function nearestWithOsmFallback(geo, overpassBuilder, photonTags, radiiKm, options = {}) {
+  const minimumMeters = Number(options.minimumMeters || 0);
   let technicalFailures = 0;
   let successfulEmptyRequests = 0;
   for (const radiusKm of radiiKm) {
     const photon = await retryNullable(() => photonNearestByTags(geo, photonTags, radiusKm, 5200), 2, 160);
-    if (photon.value != null) return { meters: photon.value, source: "OpenStreetMap / Photon" };
+    if (photon.value != null) return { meters: minimumMeters ? plausiblePoiDistance(photon.value, minimumMeters) : photon.value, source: `OpenStreetMap / Photon${minimumMeters && photon.value < minimumMeters ? " · Plausibilitätsfilter" : ""}` };
     if (photon.hadSuccessfulRequest) successfulEmptyRequests += 1; else technicalFailures += 1;
 
     const overpass = await retryNullable(() => overpassNearest(geo, withCoords(overpassBuilder, geo), radiusKm * 1000, 7200), 2, 220);
-    if (overpass.value != null) return { meters: overpass.value, source: "OpenStreetMap / Overpass" };
+    if (overpass.value != null) return { meters: minimumMeters ? plausiblePoiDistance(overpass.value, minimumMeters) : overpass.value, source: `OpenStreetMap / Overpass${minimumMeters && overpass.value < minimumMeters ? " · Plausibilitätsfilter" : ""}` };
     if (overpass.hadSuccessfulRequest) successfulEmptyRequests += 1; else technicalFailures += 1;
   }
   if (technicalFailures > 0 && successfulEmptyRequests === 0) {
@@ -1054,6 +1093,18 @@ function vacancyRiskScore(rate) {
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return json(res, 405, { error: "Method not allowed" });
+
+  const lookupPostalCode = String(req.query.lookupPostalCode || "").trim();
+  if (lookupPostalCode) {
+    try {
+      const city = await lookupCityByPostalCode(lookupPostalCode);
+      return city
+        ? json(res, 200, { postalCode: lookupPostalCode, city })
+        : json(res, 404, { error: "Für diese PLZ wurde kein Ort gefunden." });
+    } catch (error) {
+      return json(res, 502, { error: error instanceof Error ? error.message : "PLZ konnte nicht aufgelöst werden." });
+    }
+  }
   const street = String(req.query.street || "").trim();
   const postalCode = String(req.query.postalCode || "").trim();
   const city = String(req.query.city || "").trim();
@@ -1090,10 +1141,10 @@ export default async function handler(req, res) {
       runDiagnostic("Schule / Betreuung (offiziell)", "opendata.swiss", () => fetchOfficialEducationPoi(geo, municipalityName)),
       runDiagnostic("Einkauf", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, retailQuery, [
         "shop:supermarket", "shop:convenience", "shop:department_store", "shop:mall", "amenity:marketplace"
-      ], [3, 8, 20])),
+      ], [3, 8, 20], { minimumMeters: 25 })),
       runDiagnostic("Schule / Betreuung (OSM)", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, schoolQuery, [
         "amenity:school", "amenity:kindergarten", "amenity:childcare", "amenity:college"
-      ], [3, 8, 20])),
+      ], [3, 8, 20], { minimumMeters: 25 })),
       runDiagnostic("Autobahnanschluss", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, motorwayQuery, ["highway:motorway_junction"], [10, 25, 50])),
     ]);
 
@@ -1113,7 +1164,8 @@ export default async function handler(req, res) {
     const noiseBurdenPercent = noise?.noData ? null : (noise?.burden ?? null);
     const vacancy = vacancyD.value;
     const schoolOsmResult = osmSchoolD.value;
-    const schoolMeters = officialSchoolD.value ?? schoolOsmResult?.meters ?? null;
+    const schoolMetersRaw = officialSchoolD.value ?? schoolOsmResult?.meters ?? null;
+    const schoolMeters = schoolMetersRaw == null ? null : plausiblePoiDistance(schoolMetersRaw, 25);
     const shoppingMeters = shoppingD.value?.meters ?? null;
     const motorwayMeters = motorwayD.value?.meters ?? null;
 
@@ -1234,7 +1286,9 @@ export default async function handler(req, res) {
           school: radiusBucket(schoolMeters, [1, 2.5, 5, 10, 15, 20]),
           motorway: radiusBucket(motorwayMeters, [5, 10, 20, 35, 50]),
         },
-        educationSource: officialSchoolD.value != null ? "opendata.swiss" : schoolOsmResult?.source ?? null,
+        educationSource: officialSchoolD.value != null
+          ? `opendata.swiss${schoolMetersRaw != null && schoolMetersRaw < 25 ? " · Plausibilitätsfilter" : ""}`
+          : schoolOsmResult?.source ?? null,
         shoppingSource: shoppingD.value?.source ?? null,
         motorwaySource: motorwayD.value?.source ?? null,
         noiseSource: noise?.source ?? null,

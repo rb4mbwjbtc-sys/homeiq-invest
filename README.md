@@ -1,6 +1,6 @@
-# HomeIQ Invest V5.6
+# HomeIQ Invest V5.7.1
 
-## V5.6 – Calculation & Score Audit
+## V5.7.1 – Calculation & Score Audit
 
 Basis: stabile V5.5 ohne Bevölkerungsabfrage. Die funktionierende Standortdaten-Pipeline bleibt unverändert.
 
