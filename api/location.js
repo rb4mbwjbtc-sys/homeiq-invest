@@ -3,6 +3,7 @@ const GEOADMIN_IDENTIFY = "https://api3.geo.admin.ch/rest/services/ech/MapServer
 const GEOADMIN_WMS = "https://wms.geo.admin.ch/";
 const PXWEB_VACANCY = "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0902020300_101/px-x-0902020300_101/px-x-0902020300_101.px";
 const PXWEB_POPULATION = "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0103030000_102/px-x-0103030000_102/px-x-0103030000_102.px";
+const PXWEB_POPULATION_HISTORIC = "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0103030000_103/px-x-0103030000_103/px-x-0103030000_103.px";
 const TRANSPORT_LOCATIONS = "https://transport.opendata.ch/v1/locations";
 const OPENDATA_SEARCH = "https://ckan.opendata.swiss/api/3/action/package_search";
 const PHOTON_API = "https://photon.komoot.io";
@@ -26,6 +27,7 @@ const LAYERS = {
 
 let vacancyMetadataCache = null;
 let populationMetadataCache = null;
+let populationHistoricMetadataCache = null;
 const memoryCache = new Map();
 
 const json = (res, status, body) => {
@@ -1068,9 +1070,8 @@ function populationGrowthScore(growthPercent) {
   return 100;
 }
 
-async function fetchPopulationGrowthPxWeb(municipalityBfs, municipalityName) {
-  if (!populationMetadataCache) populationMetadataCache = await fetchJson(PXWEB_POPULATION, {}, 4200);
-  const variables = populationMetadataCache.variables || [];
+async function fetchPopulationValuePxWeb(url, metadata, municipalityBfs, municipalityName, requestedYear) {
+  const variables = metadata?.variables || [];
   if (variables.length < 2) return null;
 
   const region = variables.find((v) => /kanton.*bezirk.*gemeinde|gemeinde|region|geograph/i.test(`${v.code} ${v.text}`));
@@ -1088,18 +1089,16 @@ async function fetchPopulationGrowthPxWeb(municipalityBfs, municipalityName) {
   }
   if (regionIndex < 0) return null;
 
-  const yearPairs = (year.values || []).map((value, idx) => ({ value, label: String((year.valueTexts || [])[idx] ?? value), numeric: Number(String((year.valueTexts || [])[idx] ?? value).match(/\d{4}/)?.[0]) })).filter((item) => Number.isFinite(item.numeric));
-  if (yearPairs.length < 2) return null;
-  yearPairs.sort((a, b) => a.numeric - b.numeric);
-  const latest = yearPairs[yearPairs.length - 1];
-  const targetYear = latest.numeric - 5;
-  let earlier = yearPairs.filter((item) => item.numeric <= targetYear).pop();
-  if (!earlier) earlier = yearPairs[0];
-  if (!earlier || earlier.numeric >= latest.numeric) return null;
+  const yearPairs = (year.values || []).map((value, idx) => ({
+    value,
+    numeric: Number(String((year.valueTexts || [])[idx] ?? value).match(/\d{4}/)?.[0]),
+  })).filter((item) => Number.isFinite(item.numeric));
+  const selectedYear = yearPairs.find((item) => item.numeric === requestedYear);
+  if (!selectedYear) return null;
 
   const query = variables.map((variable) => {
     if (variable.code === region.code) return { code: variable.code, selection: { filter: "item", values: [values[regionIndex]] } };
-    if (variable.code === year.code) return { code: variable.code, selection: { filter: "item", values: [earlier.value, latest.value] } };
+    if (variable.code === year.code) return { code: variable.code, selection: { filter: "item", values: [selectedYear.value] } };
     if (populationType && variable.code === populationType.code) {
       const idx = pickTotalIndex(variable, [/ständige wohnbevölkerung$/i, /^ständige wohnbevölkerung/i]);
       return { code: variable.code, selection: { filter: "item", values: [variable.values[idx]] } };
@@ -1108,21 +1107,43 @@ async function fetchPopulationGrowthPxWeb(municipalityBfs, municipalityName) {
     return { code: variable.code, selection: { filter: "item", values: [variable.values[idx]] } };
   });
 
-  const data = await fetchJson(PXWEB_POPULATION, {
+  const data = await fetchJson(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, response: { format: "json-stat2" } }),
-  }, 5200);
-  const vals = Array.isArray(data.value) ? data.value.map(Number).filter(Number.isFinite) : [];
-  if (vals.length < 2 || vals[0] <= 0) return null;
-  const startPopulation = vals[0];
-  const endPopulation = vals[vals.length - 1];
+  }, 6500);
+  const value = Array.isArray(data.value) ? Number(data.value.find((item) => Number.isFinite(Number(item)))) : null;
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+async function fetchPopulationGrowthPxWeb(municipalityBfs, municipalityName) {
+  // The current STATPOP table contains 2020–2024 only. A true five-year
+  // comparison therefore needs 2019 from the official historic table.
+  // This fixes V5.5 without changing any scoring or other location logic.
+  if (!populationMetadataCache) populationMetadataCache = await fetchJson(PXWEB_POPULATION, {}, 5200);
+  if (!populationHistoricMetadataCache) populationHistoricMetadataCache = await fetchJson(PXWEB_POPULATION_HISTORIC, {}, 5200);
+
+  const currentYearVar = (populationMetadataCache.variables || []).find((v) => /jahr|year/i.test(`${v.code} ${v.text}`));
+  const currentYears = (currentYearVar?.valueTexts || currentYearVar?.values || [])
+    .map((value) => Number(String(value).match(/\d{4}/)?.[0]))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  if (!currentYears.length) return null;
+
+  const endYear = currentYears[currentYears.length - 1];
+  const startYear = endYear - 5;
+  const [startPopulation, endPopulation] = await Promise.all([
+    fetchPopulationValuePxWeb(PXWEB_POPULATION_HISTORIC, populationHistoricMetadataCache, municipalityBfs, municipalityName, startYear),
+    fetchPopulationValuePxWeb(PXWEB_POPULATION, populationMetadataCache, municipalityBfs, municipalityName, endYear),
+  ]);
+  if (!startPopulation || !endPopulation) return null;
+
   const growthPercent = ((endPopulation / startPopulation) - 1) * 100;
   return {
     growthPercent,
     score: Math.round(clamp(populationGrowthScore(growthPercent))),
-    startYear: String(earlier.numeric),
-    endYear: String(latest.numeric),
+    startYear: String(startYear),
+    endYear: String(endYear),
     startPopulation: Math.round(startPopulation),
     endPopulation: Math.round(endPopulation),
     source: "BFS STATPOP / PxWeb",
