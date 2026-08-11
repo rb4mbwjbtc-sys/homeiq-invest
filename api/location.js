@@ -1179,7 +1179,6 @@ export default async function handler(req, res) {
       shoppingD.diagnostic,
       osmSchoolD.diagnostic,
       motorwayD.diagnostic,
-      microD.diagnostic,
     ];
 
     const body = {
