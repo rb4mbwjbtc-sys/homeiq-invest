@@ -114,7 +114,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.3</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.4</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -149,7 +149,7 @@ export function Result() {
                 <div key={key}>
                   <div>
                     <span>{factorLabels[key as keyof typeof factorLabels]}</span>
-                    <small>Gewicht {factorWeights[key as keyof typeof factorWeights]} · {key === "objectQuality" ? "Baujahr, Sanierungen, Zustand und Standard" : key === "marketability" ? "Vermietbarkeit, Nachfrage, Grundriss und Ausstattung" : key === "location" ? "Mikrolage, ÖV, Einkauf, Leerstand und Lärm" : key === "netYield" ? "Miete abzüglich Betrieb und Unterhalt" : "Cashflow im Verhältnis zum Eigenkapital"}</small>
+                    <small>Gewicht {factorWeights[key as keyof typeof factorWeights]} · {key === "objectQuality" ? "Baujahr, Sanierungen, Zustand und Standard" : key === "marketability" ? "Vermietbarkeit, Nachfrage, Grundriss und Ausstattung" : key === "location" ? "ÖV, Einkauf, Schule, Verkehr, Lärm, Nachfrage und Leerstand" : key === "netYield" ? "Miete abzüglich Betrieb und Unterhalt" : "Cashflow im Verhältnis zum Eigenkapital"}</small>
                   </div>
                   <div className="bar">
                     <i style={{ width: `${value}%`, background: scoreColor(value) }} />
@@ -229,7 +229,7 @@ export function Result() {
                     }}
                   />
                 </div>
-                <small>{factor.detail}</small>
+                <small>{factor.detail}{factor.label === "Mikrolage" ? " · Informationswert, nicht zusätzlich gewichtet" : ""}</small>
               </div>
             ))}
           </div>
@@ -299,7 +299,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.3</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.4</span></div>
             <h1>{input.title}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}

@@ -1129,7 +1129,7 @@ export default async function handler(req, res) {
     const transitClassScore = { A: 95, B: 82, C: 68, D: 54 }[transitClass] || null;
     const vacancyRiskForScore = actual.vacancyRisk ?? 50;
     const municipalityDemand = Math.round(clamp(100 - vacancyRiskForScore * 0.78 + (transitClassScore ? (transitClassScore - 50) * 0.22 : 0)));
-    // V5.3: robuste, rein rechnerische Mikrolage. Keine zusätzliche Datenquelle / kein zusätzlicher API-Aufruf.
+    // V5.4: Mikrolage wie V5.3 rein rechnerisch; sie wird im Frontend nur informativ angezeigt und nicht doppelt im Lage-Gesamtscore gewichtet.
     // Verwendet ausschliesslich bereits erfolgreich geladene Distanzen. Lärm und Leerstand bleiben separat, um Doppelzählungen zu vermeiden.
     const stepScore = (meters, bands) => {
       if (meters == null || !Number.isFinite(meters)) return null;

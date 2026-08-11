@@ -130,7 +130,13 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
     },
   ];
 
-  const weights = [0.16, 0.10, 0.08, 0.08, 0.14, 0.18, 0.14, 0.12];
+  // V5.4: Mikrolage bleibt als transparenter Informations-Subscore sichtbar,
+  // fliesst aber NICHT erneut in den Lage-Gesamtscore ein. Die Mikrolage
+  // wird bereits aus ÖV, Einkauf, Schule/Betreuung und Autobahn abgeleitet.
+  // Eine zusätzliche Gewichtung würde diese Faktoren doppelt zählen.
+  const baseWeights = [0.16, 0.10, 0.08, 0.08, 0.14, 0.18, 0.14, 0];
+  const baseWeightTotal = baseWeights.reduce((sum, weight) => sum + weight, 0);
+  const weights = baseWeights.map((weight) => weight / baseWeightTotal);
   const availableWeight = raw.reduce((sum, factor, index) => sum + (factor.available ? weights[index] : 0), 0);
   const weightedScore = raw.reduce((sum, factor, index) => sum + (factor.available ? factor.score * weights[index] : 0), 0);
   const observedScore = availableWeight > 0 ? weightedScore / availableWeight : 50;
@@ -143,8 +149,8 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
   }));
   const availableFactors = raw.filter((factor) => factor.available).length;
   const dataCoverage = Math.round(availableWeight * 100);
-  const strengths = factors.filter((factor) => factor.score >= 75 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
-  const risks = factors.filter((factor) => factor.score > 0 && factor.score < 50 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
+  const strengths = factors.filter((factor) => factor.label !== "Mikrolage" && factor.score >= 75 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
+  const risks = factors.filter((factor) => factor.label !== "Mikrolage" && factor.score > 0 && factor.score < 50 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
   const baseRating = score >= 80 ? "Sehr gute Lage" : score >= 65 ? "Gute Lage" : score >= 50 ? "Durchschnittliche Lage" : "Schwache Lage";
   const rating = dataCoverage < 40 ? "Lagebewertung eingeschränkt" : baseRating;
   return { score, rating, factors, strengths, risks, dataCoverage, availableFactors, totalFactors: raw.length };
