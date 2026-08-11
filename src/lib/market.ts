@@ -107,9 +107,11 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
     },
     {
       label: "Nachfrage",
-      available: evidence ? evidence.vacancyRate !== null : true,
+      available: evidence ? (evidence.vacancyRate !== null || evidence.populationGrowth5y != null || !!evidence.transitClass) : true,
       score: Math.round(clamp(l.municipalityDemand)),
-      detail: `${l.municipalityDemand}/100 Nachfrage`,
+      detail: evidence?.populationGrowth5y != null
+        ? `${l.municipalityDemand}/100 · Bevölkerung ${evidence.populationGrowth5y >= 0 ? "+" : ""}${evidence.populationGrowth5y.toFixed(1)} % / 5J`
+        : `${l.municipalityDemand}/100 Nachfrage`,
     },
     {
       label: "Leerstandsrisiko",

@@ -114,7 +114,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.4</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.5</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -242,6 +242,7 @@ export function Result() {
               <div className="result-open-data-grid">
                 <div><span>ÖV-Güteklasse</span><strong>{input.openDataLocation.evidence.transitClass || "—"}</strong></div>
                 <div><span>Leerwohnungsziffer</span><strong>{input.openDataLocation.evidence.vacancyRate !== null ? `${input.openDataLocation.evidence.vacancyRate.toFixed(2)} %` : "—"}</strong></div>
+                <div><span>Bevölkerung 5J</span><strong>{input.openDataLocation.evidence.populationGrowth5y != null ? `${input.openDataLocation.evidence.populationGrowth5y >= 0 ? "+" : ""}${input.openDataLocation.evidence.populationGrowth5y.toFixed(1)} %` : "—"}</strong></div>
                 <div><span>Nächster ÖV-Punkt</span><strong>{input.openDataLocation.evidence.nearestPublicTransportMeters !== null ? `${input.openDataLocation.evidence.nearestPublicTransportMeters} m` : "—"}</strong></div>
                 <div><span>Einkauf</span><strong>{input.openDataLocation.evidence.nearestShoppingMeters !== null ? `${input.openDataLocation.evidence.nearestShoppingMeters} m` : "—"}</strong></div>
                 <div><span>Schule / Betreuung</span><strong>{input.openDataLocation.evidence.nearestSchoolMeters !== null ? `${input.openDataLocation.evidence.nearestSchoolMeters} m` : "—"}</strong></div>
@@ -299,7 +300,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.4</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.5</span></div>
             <h1>{input.title}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}

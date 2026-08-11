@@ -282,7 +282,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.4</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.5</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -662,6 +662,7 @@ export function NewAnalysis() {
                 <div><span>Schule / Betreuung</span><strong>{form.openDataLocation.evidence.nearestSchoolMeters !== null ? `${form.openDataLocation.evidence.nearestSchoolMeters} m` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.educationSource ? `${form.openDataLocation.evidence.educationSource}${form.openDataLocation.evidence.categoryRadiusKm?.school ? ` · bis ${form.openDataLocation.evidence.categoryRadiusKm.school} km` : ""}` : ""}</small></div>
                 <div><span>Autobahnanschluss</span><strong>{form.openDataLocation.evidence.nearestMotorwayJunctionMeters !== null ? `${form.openDataLocation.evidence.nearestMotorwayJunctionMeters} m` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.motorwaySource ? `${form.openDataLocation.evidence.motorwaySource}${form.openDataLocation.evidence.categoryRadiusKm?.motorway ? ` · bis ${form.openDataLocation.evidence.categoryRadiusKm.motorway} km` : ""}` : ""}</small></div>
                 <div><span>Leerwohnungsziffer</span><strong>{form.openDataLocation.evidence.vacancyRate !== null ? `${form.openDataLocation.evidence.vacancyRate.toFixed(2)} %` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.vacancySource || ""}</small></div>
+                <div><span>Bevölkerung 5J</span><strong>{form.openDataLocation.evidence.populationGrowth5y != null ? `${form.openDataLocation.evidence.populationGrowth5y >= 0 ? "+" : ""}${form.openDataLocation.evidence.populationGrowth5y.toFixed(1)} %` : "nicht verfügbar"}</strong><small>{form.openDataLocation.evidence.populationSource || ""}</small></div>
                 <div><span>Lärm</span><strong>{Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0) ? `${Math.max(form.openDataLocation.evidence.roadNoiseDb || 0, form.openDataLocation.evidence.railNoiseDb || 0)} dB` : "nicht verfügbar"}</strong><small>{(() => {
                   const e = form.openDataLocation!.evidence;
                   if (!e.noiseSource) return "";

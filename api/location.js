@@ -2,6 +2,7 @@ const GEOADMIN_SEARCH = "https://api3.geo.admin.ch/rest/services/ech/SearchServe
 const GEOADMIN_IDENTIFY = "https://api3.geo.admin.ch/rest/services/ech/MapServer/identify";
 const GEOADMIN_WMS = "https://wms.geo.admin.ch/";
 const PXWEB_VACANCY = "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0902020300_101/px-x-0902020300_101/px-x-0902020300_101.px";
+const PXWEB_POPULATION = "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0103030000_102/px-x-0103030000_102/px-x-0103030000_102.px";
 const TRANSPORT_LOCATIONS = "https://transport.opendata.ch/v1/locations";
 const OPENDATA_SEARCH = "https://ckan.opendata.swiss/api/3/action/package_search";
 const PHOTON_API = "https://photon.komoot.io";
@@ -24,6 +25,7 @@ const LAYERS = {
 };
 
 let vacancyMetadataCache = null;
+let populationMetadataCache = null;
 const memoryCache = new Map();
 
 const json = (res, status, body) => {
@@ -47,7 +49,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4200) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/5.1 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/5.5 (official Swiss location data + population trend demand indicator)",
         ...(options.headers || {}),
       },
     });
@@ -67,7 +69,7 @@ async function fetchText(url, options = {}, timeoutMs = 3500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,application/geo+json,application/json,*/*",
-        "User-Agent": "HomeIQ-Invest/5.1 (hybrid official-data + OSM POI Swiss real-estate analysis)",
+        "User-Agent": "HomeIQ-Invest/5.5 (official Swiss location data + population trend demand indicator)",
         ...(options.headers || {}),
       },
     });
@@ -1043,6 +1045,90 @@ async function fetchVacancyRate(municipalityBfs, municipalityName) {
   }
 }
 
+
+function pickTotalIndex(variable, preferredPatterns = []) {
+  const texts = variable?.valueTexts || [];
+  for (const pattern of preferredPatterns) {
+    const idx = texts.findIndex((text) => pattern.test(String(text)));
+    if (idx >= 0) return idx;
+  }
+  const idx = texts.findIndex((text) => /total|insgesamt|alle|gesamt/i.test(String(text)));
+  return idx >= 0 ? idx : 0;
+}
+
+function populationGrowthScore(growthPercent) {
+  if (growthPercent == null || !Number.isFinite(growthPercent)) return null;
+  if (growthPercent <= -5) return 20;
+  if (growthPercent <= -2) return 20 + ((growthPercent + 5) / 3) * 20;
+  if (growthPercent <= 0) return 40 + ((growthPercent + 2) / 2) * 10;
+  if (growthPercent <= 2) return 50 + (growthPercent / 2) * 15;
+  if (growthPercent <= 5) return 65 + ((growthPercent - 2) / 3) * 15;
+  if (growthPercent <= 8) return 80 + ((growthPercent - 5) / 3) * 10;
+  if (growthPercent <= 12) return 90 + ((growthPercent - 8) / 4) * 10;
+  return 100;
+}
+
+async function fetchPopulationGrowthPxWeb(municipalityBfs, municipalityName) {
+  if (!populationMetadataCache) populationMetadataCache = await fetchJson(PXWEB_POPULATION, {}, 4200);
+  const variables = populationMetadataCache.variables || [];
+  if (variables.length < 2) return null;
+
+  const region = variables.find((v) => /kanton.*bezirk.*gemeinde|gemeinde|region|geograph/i.test(`${v.code} ${v.text}`));
+  const year = variables.find((v) => /jahr|year/i.test(`${v.code} ${v.text}`));
+  const populationType = variables.find((v) => /bevölkerungstyp|population.*type/i.test(`${v.code} ${v.text}`));
+  if (!region || !year) return null;
+
+  const labels = region.valueTexts || [];
+  const values = region.values || [];
+  const bfs = municipalityBfs ? String(Number(municipalityBfs)) : "";
+  let regionIndex = labels.findIndex((label) => bfs && new RegExp(`(^|\\D)${bfs}(\\D|$)`).test(String(label)));
+  if (regionIndex < 0 && municipalityName) {
+    const needle = municipalityName.toLowerCase().replace(/\s+/g, " ").trim();
+    regionIndex = labels.findIndex((label) => String(label).toLowerCase().replace(/\s+/g, " ").includes(needle));
+  }
+  if (regionIndex < 0) return null;
+
+  const yearPairs = (year.values || []).map((value, idx) => ({ value, label: String((year.valueTexts || [])[idx] ?? value), numeric: Number(String((year.valueTexts || [])[idx] ?? value).match(/\d{4}/)?.[0]) })).filter((item) => Number.isFinite(item.numeric));
+  if (yearPairs.length < 2) return null;
+  yearPairs.sort((a, b) => a.numeric - b.numeric);
+  const latest = yearPairs[yearPairs.length - 1];
+  const targetYear = latest.numeric - 5;
+  let earlier = yearPairs.filter((item) => item.numeric <= targetYear).pop();
+  if (!earlier) earlier = yearPairs[0];
+  if (!earlier || earlier.numeric >= latest.numeric) return null;
+
+  const query = variables.map((variable) => {
+    if (variable.code === region.code) return { code: variable.code, selection: { filter: "item", values: [values[regionIndex]] } };
+    if (variable.code === year.code) return { code: variable.code, selection: { filter: "item", values: [earlier.value, latest.value] } };
+    if (populationType && variable.code === populationType.code) {
+      const idx = pickTotalIndex(variable, [/ständige wohnbevölkerung$/i, /^ständige wohnbevölkerung/i]);
+      return { code: variable.code, selection: { filter: "item", values: [variable.values[idx]] } };
+    }
+    const idx = pickTotalIndex(variable, [/alter.*total/i, /geschlecht.*total/i, /wohnort.*total/i]);
+    return { code: variable.code, selection: { filter: "item", values: [variable.values[idx]] } };
+  });
+
+  const data = await fetchJson(PXWEB_POPULATION, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, response: { format: "json-stat2" } }),
+  }, 5200);
+  const vals = Array.isArray(data.value) ? data.value.map(Number).filter(Number.isFinite) : [];
+  if (vals.length < 2 || vals[0] <= 0) return null;
+  const startPopulation = vals[0];
+  const endPopulation = vals[vals.length - 1];
+  const growthPercent = ((endPopulation / startPopulation) - 1) * 100;
+  return {
+    growthPercent,
+    score: Math.round(clamp(populationGrowthScore(growthPercent))),
+    startYear: String(earlier.numeric),
+    endYear: String(latest.numeric),
+    startPopulation: Math.round(startPopulation),
+    endPopulation: Math.round(endPopulation),
+    source: "BFS STATPOP / PxWeb",
+  };
+}
+
 function vacancyRiskScore(rate) {
   if (rate == null) return 50;
   if (rate <= 0.5) return 8;
@@ -1083,10 +1169,11 @@ export default async function handler(req, res) {
     const municipalityBfs = gwr?.municipalityBfs || municipalityParsed.municipalityBfs;
     const transitClass = parseTransitClass(layerMap[LAYERS.transitClass]);
 
-    const [transitD, noiseD, vacancyD, officialSchoolD, shoppingD, osmSchoolD, motorwayD] = await Promise.all([
+    const [transitD, noiseD, vacancyD, populationD, officialSchoolD, shoppingD, osmSchoolD, motorwayD] = await Promise.all([
       runDiagnostic("Nächster ÖV-Punkt", "OpenTransportData", () => fetchNearestTransit(geo)),
       runDiagnostic("Lärm Strasse/Bahn Tag+Nacht", "BAFU / BAV via GeoAdmin", () => fetchNoiseBundle(geo)),
       runDiagnostic("Leerwohnungsziffer", "BFS / opendata.swiss", () => fetchVacancyRate(municipalityBfs, municipalityName)),
+      runDiagnostic("Bevölkerungsentwicklung 5 Jahre", "BFS STATPOP / PxWeb", () => fetchPopulationGrowthPxWeb(municipalityBfs, municipalityName)),
       runDiagnostic("Schule / Betreuung (offiziell)", "opendata.swiss", () => fetchOfficialEducationPoi(geo, municipalityName)),
       runDiagnostic("Einkauf", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, retailQuery, [
         "shop:supermarket", "shop:convenience", "shop:department_store", "shop:mall", "amenity:marketplace"
@@ -1112,6 +1199,7 @@ export default async function handler(req, res) {
     const maxNoiseDb = Math.max(roadNoiseDb || 0, railNoiseDb || 0) || null;
     const noiseBurdenPercent = noise?.noData ? null : (noise?.burden ?? null);
     const vacancy = vacancyD.value;
+    const population = populationD.value;
     const schoolOsmResult = osmSchoolD.value;
     const schoolMeters = officialSchoolD.value ?? schoolOsmResult?.meters ?? null;
     const shoppingMeters = shoppingD.value?.meters ?? null;
@@ -1127,8 +1215,18 @@ export default async function handler(req, res) {
     };
 
     const transitClassScore = { A: 95, B: 82, C: 68, D: 54 }[transitClass] || null;
-    const vacancyRiskForScore = actual.vacancyRisk ?? 50;
-    const municipalityDemand = Math.round(clamp(100 - vacancyRiskForScore * 0.78 + (transitClassScore ? (transitClassScore - 50) * 0.22 : 0)));
+    const vacancyScore = actual.vacancyRisk == null ? null : 100 - actual.vacancyRisk;
+    // V5.5 Nachfrageindikator: 70 % Leerstand, 20 % 5-Jahres-Bevölkerungsentwicklung, 10 % ÖV.
+    // Fehlende Komponenten werden proportional aus der Gewichtung entfernt – es werden keine Ersatzwerte erfunden.
+    const demandComponents = [
+      { score: vacancyScore, weight: 0.70 },
+      { score: population?.score ?? null, weight: 0.20 },
+      { score: transitClassScore, weight: 0.10 },
+    ].filter((item) => item.score != null && Number.isFinite(item.score));
+    const demandWeight = demandComponents.reduce((sum, item) => sum + item.weight, 0);
+    const municipalityDemand = demandWeight > 0
+      ? Math.round(clamp(demandComponents.reduce((sum, item) => sum + item.score * item.weight, 0) / demandWeight))
+      : 50;
     // V5.4: Mikrolage wie V5.3 rein rechnerisch; sie wird im Frontend nur informativ angezeigt und nicht doppelt im Lage-Gesamtscore gewichtet.
     // Verwendet ausschliesslich bereits erfolgreich geladene Distanzen. Lärm und Leerstand bleiben separat, um Doppelzählungen zu vermeiden.
     const stepScore = (meters, bands) => {
@@ -1174,6 +1272,7 @@ export default async function handler(req, res) {
       core.diagnostic,
       transitD.diagnostic,
       vacancyD.diagnostic,
+      populationD.diagnostic,
       noiseD.diagnostic,
       officialSchoolD.diagnostic,
       shoppingD.diagnostic,
@@ -1189,6 +1288,13 @@ export default async function handler(req, res) {
         transitClass,
         vacancyRate: vacancy?.value ?? null,
         vacancyYear: vacancy?.year ?? null,
+        populationGrowth5y: population?.growthPercent ?? null,
+        populationGrowthScore: population?.score ?? null,
+        populationStartYear: population?.startYear ?? null,
+        populationEndYear: population?.endYear ?? null,
+        populationStart: population?.startPopulation ?? null,
+        populationEnd: population?.endPopulation ?? null,
+        populationSource: population?.source ?? null,
         roadNoiseDb,
         railNoiseDb,
         roadNoiseDayDb,
@@ -1240,9 +1346,14 @@ export default async function handler(req, res) {
       missing,
       diagnostics,
       loadedAt: new Date().toISOString(),
+      demand: {
+        score: municipalityDemand,
+        formula: "70 % Leerstand · 20 % Bevölkerungsentwicklung 5J · 10 % ÖV",
+        populationAvailable: population != null,
+      },
       sources: [
         { name: "swisstopo / GeoAdmin", detail: "Amtliche Adresse, Gemeinde und Gebäudeverknüpfung" },
-        { name: "Bundesamt für Statistik BFS", detail: "GWR und Leerwohnungsziffer; Gemeinde wird über die BFS-Nummer zugeordnet" },
+        { name: "Bundesamt für Statistik BFS", detail: "GWR, Leerwohnungsziffer und 5-Jahres-Bevölkerungsentwicklung (STATPOP); Gemeinde wird über die BFS-Nummer zugeordnet" },
         { name: "Bundesamt für Raumentwicklung ARE", detail: "ÖV-Güteklasse" },
         { name: "BAFU / BAV via GeoAdmin", detail: "Strassen- und Bahnlärm werden getrennt für Tag/Nacht abgefragt. Jeder BAFU-Rasterlayer läuft unabhängig über GeoAdmin WMS GetFeatureInfo; BAV-Eisenbahn-Immissionen zusätzlich über GeoAdmin Identify. Suche am Objekt sowie 25/50/100/250 m. Entfernung reduziert nur den negativen Einfluss, nicht den dB-Wert." },
         { name: "OpenTransportData / transport.opendata.ch", detail: "Nächster ÖV-Servicepunkt" },

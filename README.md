@@ -1,8 +1,8 @@
-# HomeIQ Invest V5.4
+# HomeIQ Invest V5.5
 
 Basis: stabile V5.2. Alle funktionierenden Standort- und Marktdaten-Pipelines bleiben unverändert.
 
-## V5.4 – Mikrolage ohne Doppelgewichtung
+## V5.5 – Nachfrageindikator mit Bevölkerungsentwicklung
 
 Die Mikrolage wird ausschliesslich aus bereits geladenen Standortdaten berechnet. Es gibt keinen separaten Mikrolage-/Overpass-Aufruf mehr.
 
@@ -23,3 +23,10 @@ Autobahnanschluss nutzt einen Sweet-Spot: unmittelbare Autobahnnähe ist nicht a
 - Die übrigen Lagefaktoren werden proportional auf 100 % normalisiert.
 - Datenabdeckung des Lage-Scores basiert nur auf den tatsächlich gewichteten Kernfaktoren.
 - Mikrolage wird nicht nochmals als Stärke/Risiko in der Gesamtbeurteilung gezählt.
+
+
+### V5.5 Änderung
+- Nachfrageindikator: 70 % Leerstand, 20 % 5-Jahres-Bevölkerungsentwicklung, 10 % ÖV.
+- Bevölkerungsentwicklung wird über BFS STATPOP/PxWeb anhand der bereits bekannten BFS-Gemeindenummer geladen.
+- Fehlende Bevölkerungsdaten werden nicht geschätzt; vorhandene Komponenten werden proportional neu gewichtet.
+- Die bestehende V5.4 Standort-, Mikrolage- und Lärmpipeline bleibt unverändert.
