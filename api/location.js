@@ -596,18 +596,40 @@ const haversine = (a, b) => {
 };
 
 async function fetchNearestTransit(geo) {
-  const params = new URLSearchParams({ x: String(geo.lat), y: String(geo.lon), type: "station" });
-  const payload = await fetchJson(`${TRANSPORT_LOCATIONS}?${params}`, {}, 3500);
-  const stations = payload.stations || [];
-  let nearest = Infinity;
-  for (const station of stations) {
-    const lat = Number(station.coordinate?.x);
-    const lon = Number(station.coordinate?.y);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-    const distance = haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon });
-    if (distance >= 20) nearest = Math.min(nearest, distance);
+  // transport.opendata.ch dokumentiert `type=station` nur für Textsuche.
+  // Bei Koordinatensuche werden deshalb bewusst nur x/y gesendet. Zudem
+  // dürfen sehr nahe Haltestellen (<20 m) nicht herausgefiltert werden.
+  try {
+    const params = new URLSearchParams({ x: String(geo.lat), y: String(geo.lon) });
+    const payload = await fetchJson(`${TRANSPORT_LOCATIONS}?${params}`, {}, 4200);
+    const stations = Array.isArray(payload.stations) ? payload.stations : [];
+    let nearest = Infinity;
+    for (const station of stations) {
+      const apiDistance = Number(station.distance);
+      if (Number.isFinite(apiDistance) && apiDistance >= 0) {
+        nearest = Math.min(nearest, apiDistance);
+        continue;
+      }
+      const lat = Number(station.coordinate?.x ?? station.coordinates?.x);
+      const lon = Number(station.coordinate?.y ?? station.coordinates?.y);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const distance = haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon });
+      nearest = Math.min(nearest, distance);
+    }
+    if (Number.isFinite(nearest)) return Math.round(nearest);
+  } catch (_) {
+    // Fallback folgt unten. Die Standortanalyse soll bei einem temporären
+    // Ausfall der inoffiziellen Transport-API nicht ohne ÖV-Distanz bleiben.
   }
-  return Number.isFinite(nearest) ? Math.round(nearest) : null;
+
+  const transitQuery = (r) => `
+    nwr(around:${r},{{LAT}},{{LON}})[public_transport=platform];
+    nwr(around:${r},{{LAT}},{{LON}})[highway=bus_stop];
+    nwr(around:${r},{{LAT}},{{LON}})[railway~"station|halt|tram_stop"];`;
+  const fallback = await nearestWithOsmFallback(geo, transitQuery, [
+    "public_transport:platform", "highway:bus_stop", "railway:station", "railway:halt", "railway:tram_stop"
+  ], [2, 5, 10]);
+  return fallback?.meters ?? null;
 }
 
 async function overpassNearest(geo, queryBody, maxRadiusMeters, timeoutMs = 4200) {
@@ -1308,7 +1330,7 @@ export default async function handler(req, res) {
         { name: "Bundesamt für Statistik BFS", detail: "GWR und Leerwohnungsziffer; Gemeinde wird über die BFS-Nummer zugeordnet" },
         { name: "Bundesamt für Raumentwicklung ARE", detail: "ÖV-Güteklasse" },
         { name: "BAFU / BAV via GeoAdmin", detail: "Strassen- und Bahnlärm werden getrennt für Tag/Nacht abgefragt. Jeder BAFU-Rasterlayer läuft unabhängig über GeoAdmin WMS GetFeatureInfo; BAV-Eisenbahn-Immissionen zusätzlich über GeoAdmin Identify. Suche am Objekt sowie 25/50/100/250 m. Entfernung reduziert nur den negativen Einfluss, nicht den dB-Wert." },
-        { name: "OpenTransportData / transport.opendata.ch", detail: "Nächster ÖV-Servicepunkt" },
+        { name: "OpenTransportData / transport.opendata.ch", detail: "Nächster ÖV-Servicepunkt; OpenStreetMap-Fallback bei fehlender oder temporär nicht verfügbarer Koordinatenantwort" },
         { name: "opendata.swiss", detail: "Offizielle kantonale/kommunale Schul-, Betreuungs- und Leerstandsdaten, sofern maschinenlesbar verfügbar" },
         { name: "OpenStreetMap", detail: "Einkauf, Schule/Betreuung und Autobahnanschlüsse über Photon/Overpass. Mikrolage wird ohne zusätzliche Abfrage aus den bereits geladenen Distanzen zu Einkauf, Schule/Betreuung, ÖV und Autobahn berechnet." },
       ],

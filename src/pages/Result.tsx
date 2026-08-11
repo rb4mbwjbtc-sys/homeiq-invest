@@ -389,7 +389,7 @@ export function Result() {
           <div>
             <h2>OBJEKTDATEN</h2>
             <p>Objekttyp {input.propertyType}</p>
-            <p>Baujahr {input.yearBuilt || "—"}</p>
+            <p>Baujahr {input.yearBuilt || input.openDataLocation?.building?.constructionYear || "—"}{!input.yearBuilt && input.openDataLocation?.building?.constructionYear ? " (Open Data)" : ""}</p>
             <p>Letzte Renovation {input.renovatedYear || "—"}</p>
             <p>Wohnfläche {number(input.livingArea)} m²</p>
             <p>Zimmer {input.rooms || "—"}</p>
