@@ -22,3 +22,9 @@ Basis: stabile V5.5 ohne Bevölkerungsabfrage. Die funktionierende Standortdaten
 - Keine neue externe Datenquelle.
 - Keine Änderung an der funktionierenden Lage-/Lärm-/OSM-Pipeline.
 - Ergebniswerte werden bei jedem Öffnen aus den gespeicherten Eingaben neu berechnet.
+
+## V5.7.5
+- Flächenpassung der Marktfähigkeit symmetrisch verschärft.
+- Extreme Unter- und Überdimensionierung werden bei gleicher relativer Abweichung gleich behandelt.
+- Ab mehr als 40 % Abweichung wird die Marktfähigkeit als Plausibilitätsregel auf maximal 60/100 begrenzt.
+- Gewichtung bleibt unverändert: Zimmersegment 35 %, Flächenpassung 30 %, Objekttyp 20 %, Stockwerk/Zugänglichkeit 15 %.

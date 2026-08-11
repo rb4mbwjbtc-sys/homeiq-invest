@@ -134,7 +134,7 @@ function objectQualityScore(input: AnalysisInput) {
 }
 
 function marketabilityScore(input: AnalysisInput) {
-  // V5.7.4: Marktfähigkeit = Marktgängigkeit des konkreten Wohnsegments.
+  // V5.7.5: Marktfähigkeit = Marktgängigkeit des konkreten Wohnsegments.
   // Bewusst getrennt von Objektqualität (Substanz/Ausstattung) und Lagequalität.
   // Keine Doppelgewichtung von Balkon, Parkplatz, Keller, Zustand, ÖV, Leerstand etc.
 
@@ -152,60 +152,36 @@ function marketabilityScore(input: AnalysisInput) {
     return 60;
   };
 
-  // V5.7.5: strengere Flächenpassung. Nicht die absolute Wohnfläche wird bewertet,
-  // sondern ob sie zum Zimmersegment passt. Extrem untypische Kombinationen
-  // (z. B. 1.5 Zimmer / 120 m²) werden bewusst deutlich abgestraft.
-  type AreaBand = { optimalMin: number; optimalMax: number; plausibleMin: number; plausibleMax: number; extremeMax?: number };
-
-  const areaBand = (rooms: number): AreaBand => {
-    if (rooms <= 1.5) return { optimalMin: 25, optimalMax: 55, plausibleMin: 20, plausibleMax: 70, extremeMax: 70 };
-    if (rooms <= 2.5) return { optimalMin: 40, optimalMax: 75, plausibleMin: 30, plausibleMax: 90, extremeMax: 100 };
-    if (rooms <= 3.5) return { optimalMin: 65, optimalMax: 105, plausibleMin: 55, plausibleMax: 125, extremeMax: 140 };
-    if (rooms <= 4.5) return { optimalMin: 90, optimalMax: 135, plausibleMin: 75, plausibleMax: 155, extremeMax: 175 };
-    if (rooms <= 5.5) return { optimalMin: 120, optimalMax: 170, plausibleMin: 100, plausibleMax: 200, extremeMax: 220 };
-    const optimalMin = Math.max(150, rooms * 24);
-    const optimalMax = Math.max(190, rooms * 30);
-    return { optimalMin, optimalMax, plausibleMin: optimalMin * 0.82, plausibleMax: optimalMax * 1.18, extremeMax: optimalMax * 1.35 };
-  };
-
-  const lerpScore = (value: number, from: number, to: number, fromScore: number, toScore: number) => {
-    if (to <= from) return toScore;
-    const t = Math.max(0, Math.min(1, (value - from) / (to - from)));
-    return fromScore + (toScore - fromScore) * t;
+  const targetArea = (rooms: number): [number, number] => {
+    if (rooms <= 1.5) return [35, 55];
+    if (rooms <= 2.5) return [50, 75];
+    if (rooms <= 3.5) return [70, 95];
+    if (rooms <= 4.5) return [90, 120];
+    if (rooms <= 5.5) return [115, 150];
+    return [Math.max(130, rooms * 22), Math.max(170, rooms * 30)];
   };
 
   const areaFitScore = (rooms: number, area: number) => {
     if (!rooms || !area) return 60;
-    const band = areaBand(rooms);
+    const [min, max] = targetArea(rooms);
+    if (area >= min && area <= max) return 100;
 
-    // Optimalbereich: praktisch volle Marktgängigkeit; zur Mitte hin 100 Punkte.
-    if (area >= band.optimalMin && area <= band.optimalMax) {
-      const mid = (band.optimalMin + band.optimalMax) / 2;
-      const half = Math.max((band.optimalMax - band.optimalMin) / 2, 1);
-      return Math.round(100 - 10 * Math.min(Math.abs(area - mid) / half, 1));
-    }
+    // V5.7.5: symmetrische, progressive Flächenpassung.
+    // Zu kleine und zu grosse Wohnungen werden bei gleicher relativer
+    // Abweichung von ihrem Zimmersegment identisch bewertet.
+    const deviation = area < min ? (min - area) / min : (area - max) / max;
+    if (deviation <= 0.10) return 85;
+    if (deviation <= 0.25) return 70;
+    if (deviation <= 0.40) return 50;
+    if (deviation <= 0.60) return 25;
+    return 10;
+  };
 
-    // Noch plausible Randbereiche: kontinuierlich von 90 auf 65 Punkte.
-    if (area >= band.plausibleMin && area < band.optimalMin)
-      return Math.round(lerpScore(area, band.plausibleMin, band.optimalMin, 65, 90));
-    if (area > band.optimalMax && area <= band.plausibleMax)
-      return Math.round(lerpScore(area, band.optimalMax, band.plausibleMax, 90, 65));
-
-    // Ausserhalb des plausiblen Bereichs wird progressiv strenger bewertet.
-    if (area < band.plausibleMin) {
-      const ratio = area / band.plausibleMin;
-      if (ratio >= 0.75) return Math.round(lerpScore(ratio, 0.75, 1, 35, 65));
-      if (ratio >= 0.50) return Math.round(lerpScore(ratio, 0.50, 0.75, 15, 35));
-      return 10;
-    }
-
-    const extremeMax = band.extremeMax ?? band.plausibleMax * 1.25;
-    if (area <= extremeMax) return Math.round(lerpScore(area, band.plausibleMax, extremeMax, 65, 35));
-
-    // Sehr grosse Überdimensionierung: weitere progressive Abwertung bis mind. 10 Punkte.
-    const oversizeRatio = area / extremeMax;
-    if (oversizeRatio >= 1.5) return 0;
-    return Math.round(lerpScore(oversizeRatio, 1, 1.5, 35, 0));
+  const extremeAreaMismatch = (rooms: number, area: number) => {
+    if (!rooms || !area) return false;
+    const [min, max] = targetArea(rooms);
+    const deviation = area < min ? (min - area) / min : area > max ? (area - max) / max : 0;
+    return deviation > 0.40;
   };
 
   const floorScore = (floor: string) => {
@@ -236,13 +212,19 @@ function marketabilityScore(input: AnalysisInput) {
     const rooms = weighted((unit) => roomSegmentScore(unit.rooms));
     const area = weighted((unit) => areaFitScore(unit.rooms, unit.livingArea));
     const floors = weighted((unit) => floorScore(unit.floor));
-    return Math.round(clamp(rooms * 0.35 + area * 0.30 + typeScore * 0.20 + floors * 0.15));
+    const rawScore = clamp(rooms * 0.35 + area * 0.30 + typeScore * 0.20 + floors * 0.15);
+    const hasExtremeMismatch = input.rentalUnits.some((unit) => extremeAreaMismatch(unit.rooms, unit.livingArea));
+    return Math.round(hasExtremeMismatch ? Math.min(rawScore, 60) : rawScore);
   }
 
   const rooms = roomSegmentScore(input.rooms);
   const area = areaFitScore(input.rooms, input.livingArea);
   const floor = floorScore(input.floor);
-  return Math.round(clamp(rooms * 0.35 + area * 0.30 + typeScore * 0.20 + floor * 0.15));
+  const rawScore = clamp(rooms * 0.35 + area * 0.30 + typeScore * 0.20 + floor * 0.15);
+
+  // Plausibilitätsdeckel für extreme Zimmer-/Flächen-Kombinationen.
+  // Die Faktor-Gewichtungen 35/30/20/15 bleiben unverändert.
+  return Math.round(extremeAreaMismatch(input.rooms, input.livingArea) ? Math.min(rawScore, 60) : rawScore);
 }
 
 export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
