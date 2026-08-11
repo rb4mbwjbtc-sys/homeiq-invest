@@ -149,7 +149,7 @@ export function Result() {
                 <div key={key}>
                   <div>
                     <span>{factorLabels[key as keyof typeof factorLabels]}</span>
-                    <small>Gewicht {factorWeights[key as keyof typeof factorWeights]} · {key === "objectQuality" ? "Alter/Renovation, Grundriss, Standard, Ausstattung, Bad und Parkierung" : key === "marketability" ? "Grundriss, Wohnfläche und vermietungsrelevante Ausstattung" : key === "location" ? "ÖV, Einkauf, Schule, Verkehr, Lärm und Leerstand" : key === "netYield" ? "Nettoertrag im Verhältnis zur Gesamtinvestition" : "Nettoertrag nach Zins im Verhältnis zum Eigenkapital"}</small>
+                    <small>Gewicht {factorWeights[key as keyof typeof factorWeights]} · {key === "objectQuality" ? "Alter/Renovation, Grundriss, Standard, Ausstattung, Bad und Parkierung" : key === "marketability" ? "Zimmersegment, Flächenpassung, Objekttyp und Stockwerk/Zugänglichkeit" : key === "location" ? "ÖV, Einkauf, Schule, Verkehr, Lärm und Leerstand" : key === "netYield" ? "Nettoertrag im Verhältnis zur Gesamtinvestition" : "Nettoertrag nach Zins im Verhältnis zum Eigenkapital"}</small>
                   </div>
                   <div className="bar">
                     <i style={{ width: `${value}%`, background: scoreColor(value) }} />

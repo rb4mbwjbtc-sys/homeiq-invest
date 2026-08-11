@@ -134,24 +134,79 @@ function objectQualityScore(input: AnalysisInput) {
 }
 
 function marketabilityScore(input: AnalysisInput) {
-  // V5.6: Marktfähigkeit bewertet nur die konkrete Vermietbarkeit des Objekts.
-  // Standort-Nachfrage und Leerstand gehören zur Lageanalyse und werden hier
-  // bewusst nicht nochmals eingerechnet.
-  let score = 25;
-  const f = new Set((Array.isArray(input.features) ? input.features : []).map((item) => item.toLowerCase()));
-  const hasOutdoor = [...f].some((x) => x.includes("balkon") || x.includes("terrasse") || x.includes("garten"));
-  const hasLift = [...f].some((x) => x.includes("lift"));
-  const hasStorage = [...f].some((x) => x.includes("keller") || x.includes("reduit"));
+  // V5.7.4: Marktfähigkeit = Marktgängigkeit des konkreten Wohnsegments.
+  // Bewusst getrennt von Objektqualität (Substanz/Ausstattung) und Lagequalität.
+  // Keine Doppelgewichtung von Balkon, Parkplatz, Keller, Zustand, ÖV, Leerstand etc.
 
-  if (hasOutdoor) score += 15;
-  if (hasLift) score += 10;
-  if (input.parkingSpaces > 0) score += 15;
-  if (hasStorage) score += 5;
+  const roomSegmentScore = (rooms: number) => {
+    if (rooms === 3.5) return 100;
+    if (rooms === 2.5) return 95;
+    if (rooms === 4.5) return 90;
+    if (rooms === 1.5) return 80;
+    if (rooms === 5.5) return 75;
+    if (rooms === 1) return 65;
+    if (rooms >= 6) return 60;
+    // Zwischenwerte / ungewöhnliche Eingaben konservativ interpolieren.
+    if (rooms > 2.5 && rooms < 4.5) return 95;
+    if (rooms > 1.5 && rooms < 5.5) return 85;
+    return 60;
+  };
 
-  score += input.rooms >= 2.5 && input.rooms <= 4.5 ? 15 : input.rooms >= 1.5 && input.rooms <= 5.5 ? 10 : 5;
-  score += input.livingArea >= 55 && input.livingArea <= 125 ? 15 : input.livingArea >= 40 && input.livingArea <= 150 ? 10 : 5;
+  const targetArea = (rooms: number): [number, number] => {
+    if (rooms <= 1.5) return [35, 55];
+    if (rooms <= 2.5) return [50, 75];
+    if (rooms <= 3.5) return [70, 95];
+    if (rooms <= 4.5) return [90, 120];
+    if (rooms <= 5.5) return [115, 150];
+    return [Math.max(130, rooms * 22), Math.max(170, rooms * 30)];
+  };
 
-  return Math.round(clamp(score));
+  const areaFitScore = (rooms: number, area: number) => {
+    if (!rooms || !area) return 60;
+    const [min, max] = targetArea(rooms);
+    if (area >= min && area <= max) return 100;
+    const deviation = area < min ? (min - area) / min : (area - max) / max;
+    if (deviation <= 0.10) return 85;
+    if (deviation <= 0.25) return 72;
+    if (deviation <= 0.40) return 58;
+    return 40;
+  };
+
+  const floorScore = (floor: string) => {
+    const value = (floor || "").toLowerCase();
+    if (value.includes("attika") || value.includes("ph") || value.includes("penthouse")) return 95;
+    if (value.includes("dach")) return 80;
+    if (value === "eg" || value.includes("erdgeschoss")) return 85;
+    if (value.includes("1.") || value.includes("2.") || value.includes("3.")) return 100;
+    // Falls später höhere Etagen ergänzt werden: mit Lift wäre die Zugänglichkeit
+    // separat zu beurteilen. Unbekannte Stockwerke werden neutral behandelt.
+    return 85;
+  };
+
+  const typeScore = input.propertyType === "wohnung"
+    ? 100
+    : input.propertyType === "mfh"
+      ? 85
+      : 80; // EFH, Doppelhaus und Reihenhaus
+
+  // Beim MFH wird die Marktgängigkeit aus dem Wohnungsmix abgeleitet. Dadurch
+  // profitieren marktgängige 2.5–4.5-Zimmer-Einheiten, ohne Ausstattung/Lage doppelt zu zählen.
+  if (input.propertyType === "mfh" && input.rentalUnits.length) {
+    const totalArea = input.rentalUnits.reduce((sum, unit) => sum + Math.max(unit.livingArea, 0), 0);
+    const weighted = (selector: (unit: AnalysisInput["rentalUnits"][number]) => number) => {
+      if (totalArea <= 0) return input.rentalUnits.reduce((sum, unit) => sum + selector(unit), 0) / input.rentalUnits.length;
+      return input.rentalUnits.reduce((sum, unit) => sum + selector(unit) * Math.max(unit.livingArea, 0), 0) / totalArea;
+    };
+    const rooms = weighted((unit) => roomSegmentScore(unit.rooms));
+    const area = weighted((unit) => areaFitScore(unit.rooms, unit.livingArea));
+    const floors = weighted((unit) => floorScore(unit.floor));
+    return Math.round(clamp(rooms * 0.35 + area * 0.30 + typeScore * 0.20 + floors * 0.15));
+  }
+
+  const rooms = roomSegmentScore(input.rooms);
+  const area = areaFitScore(input.rooms, input.livingArea);
+  const floor = floorScore(input.floor);
+  return Math.round(clamp(rooms * 0.35 + area * 0.30 + typeScore * 0.20 + floor * 0.15));
 }
 
 export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
@@ -222,7 +277,7 @@ export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
   if (marketAnalysis.marketRentAvailable && marketAnalysis.rentDifferencePercent >= 6) positives.push("Erkennbares Marktmietpotenzial");
   if (ltv > 80) negatives.push("Hohe Belehnung");
   if (scoreBreakdown.objectQuality < 50) negatives.push("Erhöhter Sanierungs- oder Unterhaltsbedarf möglich");
-  if (scoreBreakdown.marketability < 50) negatives.push("Eingeschränkte Vermietbarkeit des konkreten Objekts");
+  if (scoreBreakdown.marketability < 50) negatives.push("Eingeschränkte Marktgängigkeit des Objektsegments");
 
   return { input, totalInvestment, mortgage, annualRent, grossYield, netYield, annualInterest, annualAmortization, annualCashflow, monthlyCashflow, cashOnCashReturn, equityReturn, ltv, pricePerSqm, score, scoreBreakdown, rating, recommendation, positives, negatives, locationAnalysis, marketAnalysis };
 }
