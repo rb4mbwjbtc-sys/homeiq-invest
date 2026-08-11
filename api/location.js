@@ -6,10 +6,10 @@ const PXWEB_POPULATION_SERIES_ENDPOINTS = [
   // Offizieller STATPOP-Gemeinde-Zeitreihen-Cube. Dieser Cube verwendet die
   // BFS-Gemeindenummer direkt als PxWeb-Wert (z. B. 0942 = Thun) und enthält
   // die benötigten Jahre 2019 und 2024 in derselben Tabelle.
-  "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0103010000_202/px-x-0103010000_202/px-x-0103010000_202.px",
+  "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0102010000_104/-/px-x-0102010000_104.px",
   // Zweiter offizieller Gemeinde-Cube als Fallback, falls der erste temporär
   // nicht erreichbar ist oder sich dessen Metadaten ändern.
-  "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0103030000_220/px-x-0103030000_220/px-x-0103030000_220.px",
+  "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0102010000_103/px-x-0102010000_103/px-x-0102010000_103.px",
 ];
 const TRANSPORT_LOCATIONS = "https://transport.opendata.ch/v1/locations";
 const OPENDATA_SEARCH = "https://ckan.opendata.swiss/api/3/action/package_search";
@@ -57,7 +57,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4200) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/5.5.4 (STATPOP municipality-series fix)",
+        "User-Agent": "HomeIQ-Invest/5.5.5 (STATPOP current-cube fix)",
         ...(options.headers || {}),
       },
     });
@@ -77,7 +77,7 @@ async function fetchText(url, options = {}, timeoutMs = 3500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,application/geo+json,application/json,*/*",
-        "User-Agent": "HomeIQ-Invest/5.5.4 (STATPOP municipality-series fix)",
+        "User-Agent": "HomeIQ-Invest/5.5.5 (STATPOP current-cube fix)",
         ...(options.headers || {}),
       },
     });
@@ -1149,7 +1149,7 @@ async function fetchPopulationValuesPxWeb(metadata, municipalityBfs, municipalit
   const data = await fetchJson(metadata.__endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, response: { format: "json-stat" } }),
+    body: JSON.stringify({ query, response: { format: "json-stat2" } }),
   }, 6500);
 
   const numericValues = Array.isArray(data.value)
@@ -1166,7 +1166,7 @@ async function fetchPopulationValuesPxWeb(metadata, municipalityBfs, municipalit
 }
 
 async function fetchPopulationGrowthPxWeb(municipalityBfs, municipalityName) {
-  // V5.5.4: Offizieller Gemeinde-Zeitreihen-Cube + Metadata-first. Wir lesen zuerst
+  // V5.5.5: Aktueller STATPOP-Gemeinde-Cube 2010–2024 + Metadata-first. Wir lesen zuerst
   // die tatsächlichen Dimensionen und verwenden die BFS-Gemeindenummer als PxWeb-Code.
   // Dadurch hängt HomeIQ nicht von vermuteten PxWeb-Codes ab.
   for (const endpoint of PXWEB_POPULATION_SERIES_ENDPOINTS) {
