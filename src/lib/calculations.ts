@@ -22,19 +22,92 @@ function equityScore(value: number) {
 }
 
 function objectQualityScore(input: AnalysisInput) {
-  const conditionBase = {
-    sanierungsbeduerftig: 18,
-    renovationsbeduerftig: 40,
-    gepflegt: 66,
-    modernisiert: 86,
+  // V5.7.2: Objektqualität beantwortet ausschliesslich die Frage
+  // "Wie gut ist das konkrete Objekt selbst?". Keine Lage-, Nachfrage-
+  // oder Marktdaten fliessen in diesen Score ein.
+  // Gewichtung: Substanz 40 %, Grundriss 20 %, Standard 15 %,
+  // Ausstattung 10 %, Badezimmer 7 %, Parkierung 8 %.
+  const currentYear = new Date().getFullYear();
+
+  // 1) Alter, Renovation & Zustand (40 %)
+  const buildingAge = input.yearBuilt > 0 ? Math.max(0, currentYear - input.yearBuilt) : 35;
+  const buildingAgeScore = buildingAge <= 5 ? 100
+    : buildingAge <= 10 ? 94
+    : buildingAge <= 20 ? 84
+    : buildingAge <= 30 ? 72
+    : buildingAge <= 40 ? 60
+    : buildingAge <= 55 ? 48
+    : 36;
+
+  // Fehlende Renovationsangabe ist neutral und wird nie als "nie renoviert" bestraft.
+  const renovationAge = input.renovatedYear > 0 ? Math.max(0, currentYear - input.renovatedYear) : null;
+  const renovationScore = renovationAge === null ? 70
+    : renovationAge <= 5 ? 100
+    : renovationAge <= 10 ? 92
+    : renovationAge <= 20 ? 78
+    : renovationAge <= 30 ? 62
+    : 48;
+
+  const conditionScore = {
+    sanierungsbeduerftig: 25,
+    renovationsbeduerftig: 45,
+    gepflegt: 72,
+    modernisiert: 88,
     neuwertig: 98,
   }[input.condition];
-  const currentYear = new Date().getFullYear();
-  const effectiveYear = Math.max(input.renovatedYear || 0, input.yearBuilt || 0);
-  const age = effectiveYear ? currentYear - effectiveYear : 35;
-  const ageScore = age <= 5 ? 100 : age <= 15 ? 86 : age <= 30 ? 68 : age <= 50 ? 48 : 30;
-  const qualityScore = { einfach: 45, durchschnittlich: 65, gehoben: 84, luxus: 96 }[input.quality];
-  return Math.round(clamp(conditionBase * 0.55 + ageScore * 0.25 + qualityScore * 0.20));
+
+  // Zustand hat die höchste Aussagekraft; Baujahr und Renovationsalter ergänzen ihn.
+  const substanceScore = buildingAgeScore * 0.35 + renovationScore * 0.25 + conditionScore * 0.40;
+
+  // 2) Grundriss & Flächeneffizienz (20 %): funktionale Dimensionierung,
+  // nicht Vermietbarkeit. Bewertet wird primär die Fläche pro Zimmer.
+  const rooms = Math.max(input.rooms || 0, 0.5);
+  const areaPerRoom = input.livingArea > 0 ? input.livingArea / rooms : 0;
+  let layoutScore = 65;
+  if (areaPerRoom >= 20 && areaPerRoom <= 30) layoutScore = 92;
+  else if (areaPerRoom >= 17 && areaPerRoom < 20) layoutScore = 82;
+  else if (areaPerRoom > 30 && areaPerRoom <= 35) layoutScore = 82;
+  else if (areaPerRoom >= 14 && areaPerRoom < 17) layoutScore = 68;
+  else if (areaPerRoom > 35 && areaPerRoom <= 42) layoutScore = 68;
+  else if (areaPerRoom > 0) layoutScore = 52;
+
+  // 3) Ausbaustandard (15 %)
+  const standardScore = { einfach: 45, durchschnittlich: 70, gehoben: 88, luxus: 98 }[input.quality];
+
+  // 4) Ausstattung (10 %): begrenzter Komfortbonus, damit einzelne Häkchen
+  // eine schwache Bausubstanz nicht überkompensieren können.
+  const features = new Set((Array.isArray(input.features) ? input.features : []).map((item) => item.toLowerCase()));
+  const has = (...terms: string[]) => [...features].some((x) => terms.some((term) => x.includes(term)));
+  let equipmentPoints = 30; // neutrale Grundausstattung
+  if (has('balkon', 'terrasse', 'garten')) equipmentPoints += 18;
+  if (has('lift')) equipmentPoints += 14;
+  if (has('keller', 'reduit')) equipmentPoints += 10;
+  if (has('waschmaschine')) equipmentPoints += 8;
+  if (has('tumbler')) equipmentPoints += 6;
+  if (has('minergie', 'energie')) equipmentPoints += 10;
+  if (has('aussicht', 'whirlpool', 'pool')) equipmentPoints += 4;
+  const equipmentScore = clamp(equipmentPoints);
+
+  // 5) Badezimmer (7 %): passend zur Objektgrösse, nicht "mehr = immer besser".
+  const bathrooms = Math.max(0, input.bathrooms || 0);
+  let bathroomScore = 35;
+  if (rooms <= 2.5) bathroomScore = bathrooms >= 1 ? 95 : 35;
+  else if (rooms <= 3.5) bathroomScore = bathrooms >= 1 ? 90 : 30;
+  else if (rooms <= 4.5) bathroomScore = bathrooms >= 2 ? 100 : bathrooms === 1 ? 72 : 25;
+  else bathroomScore = bathrooms >= 2 ? 100 : bathrooms === 1 ? 58 : 20;
+
+  // 6) Parkierung (8 %): reine Objekteigenschaft; die lokale Notwendigkeit
+  // eines Parkplatzes gehört nicht in die Objektqualität.
+  const parkingScore = input.parkingSpaces >= 2 ? 100 : input.parkingSpaces === 1 ? 85 : 45;
+
+  return Math.round(clamp(
+    substanceScore * 0.40 +
+    layoutScore * 0.20 +
+    standardScore * 0.15 +
+    equipmentScore * 0.10 +
+    bathroomScore * 0.07 +
+    parkingScore * 0.08
+  ));
 }
 
 function marketabilityScore(input: AnalysisInput) {
