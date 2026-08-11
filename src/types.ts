@@ -78,13 +78,6 @@ export type OpenDataLocationReport = {
     transitClass: string | null;
     vacancyRate: number | null;
     vacancyYear: string | null;
-    populationGrowth5y?: number | null;
-    populationGrowthScore?: number | null;
-    populationStartYear?: string | null;
-    populationEndYear?: string | null;
-    populationStart?: number | null;
-    populationEnd?: number | null;
-    populationSource?: string | null;
     roadNoiseDb: number | null;
     railNoiseDb: number | null;
     roadNoiseDayDb?: number | null;

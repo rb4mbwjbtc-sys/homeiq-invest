@@ -10,7 +10,7 @@ export function Settings() {
         <div><span>Sprache</span><strong>Deutsch (Schweiz)</strong></div>
         <div><span>Währung</span><strong>CHF</strong></div>
         <div><span>Datenregion</span><strong>Schweiz</strong></div>
-        <div><span>Version</span><strong>Independent V5.5.5 · Demand + Population Trend</strong></div>
+        <div><span>Version</span><strong>Independent V5.5 · Stable Demand without Population Growth</strong></div>
       </section>
     </div>
   );

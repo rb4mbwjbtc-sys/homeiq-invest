@@ -107,11 +107,9 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
     },
     {
       label: "Nachfrage",
-      available: evidence ? (evidence.vacancyRate !== null || evidence.populationGrowth5y != null || !!evidence.transitClass) : true,
+      available: evidence ? evidence.vacancyRate !== null : true,
       score: Math.round(clamp(l.municipalityDemand)),
-      detail: evidence?.populationGrowth5y != null
-        ? `${l.municipalityDemand}/100 · Bevölkerung ${evidence.populationGrowth5y >= 0 ? "+" : ""}${evidence.populationGrowth5y.toFixed(1)} % / 5J`
-        : `${l.municipalityDemand}/100 Nachfrage`,
+      detail: `${l.municipalityDemand}/100 Nachfrage`,
     },
     {
       label: "Leerstandsrisiko",
@@ -132,7 +130,7 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
     },
   ];
 
-  // V5.4: Mikrolage bleibt als transparenter Informations-Subscore sichtbar,
+  // V5.5: Mikrolage bleibt als transparenter Informations-Subscore sichtbar,
   // fliesst aber NICHT erneut in den Lage-Gesamtscore ein. Die Mikrolage
   // wird bereits aus ÖV, Einkauf, Schule/Betreuung und Autobahn abgeleitet.
   // Eine zusätzliche Gewichtung würde diese Faktoren doppelt zählen.
