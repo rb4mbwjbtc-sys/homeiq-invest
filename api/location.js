@@ -3,11 +3,13 @@ const GEOADMIN_IDENTIFY = "https://api3.geo.admin.ch/rest/services/ech/MapServer
 const GEOADMIN_WMS = "https://wms.geo.admin.ch/";
 const PXWEB_VACANCY = "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0902020300_101/px-x-0902020300_101/px-x-0902020300_101.px";
 const PXWEB_POPULATION_SERIES_ENDPOINTS = [
-  // Aktueller offizieller STATPOP-Gemeinde-Zeitreihen-Cube (2010–2024).
-  // Der Zwischenpfad "-" ist Teil des BFS-PxWeb-Endpunkts.
-  "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0102010000_104/-/px-x-0102010000_104.px",
-  // Fallback auf den Vorgänger-Cube, falls BFS den aktuellen Cube temporär nicht liefert.
-  "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0102010000_103/px-x-0102010000_103/px-x-0102010000_103.px",
+  // Offizieller STATPOP-Gemeinde-Zeitreihen-Cube. Dieser Cube verwendet die
+  // BFS-Gemeindenummer direkt als PxWeb-Wert (z. B. 0942 = Thun) und enthält
+  // die benötigten Jahre 2019 und 2024 in derselben Tabelle.
+  "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0103010000_202/px-x-0103010000_202/px-x-0103010000_202.px",
+  // Zweiter offizieller Gemeinde-Cube als Fallback, falls der erste temporär
+  // nicht erreichbar ist oder sich dessen Metadaten ändern.
+  "https://www.pxweb.bfs.admin.ch/api/v1/de/px-x-0103030000_220/px-x-0103030000_220/px-x-0103030000_220.px",
 ];
 const TRANSPORT_LOCATIONS = "https://transport.opendata.ch/v1/locations";
 const OPENDATA_SEARCH = "https://ckan.opendata.swiss/api/3/action/package_search";
@@ -55,7 +57,7 @@ async function fetchJson(url, options = {}, timeoutMs = 4200) {
       signal: controller.signal,
       headers: {
         Accept: "application/json",
-        "User-Agent": "HomeIQ-Invest/5.5.3 (STATPOP metadata-first bugfix)",
+        "User-Agent": "HomeIQ-Invest/5.5.4 (STATPOP municipality-series fix)",
         ...(options.headers || {}),
       },
     });
@@ -75,7 +77,7 @@ async function fetchText(url, options = {}, timeoutMs = 3500) {
       signal: controller.signal,
       headers: {
         Accept: "text/csv,text/plain,application/geo+json,application/json,*/*",
-        "User-Agent": "HomeIQ-Invest/5.5.3 (STATPOP metadata-first bugfix)",
+        "User-Agent": "HomeIQ-Invest/5.5.4 (STATPOP municipality-series fix)",
         ...(options.headers || {}),
       },
     });
@@ -1093,7 +1095,8 @@ async function fetchPopulationValuesPxWeb(metadata, municipalityBfs, municipalit
 
   const labels = region.valueTexts || [];
   const values = region.values || [];
-  const bfs = municipalityBfs ? String(Number(municipalityBfs)) : "";
+  const bfsNumeric = municipalityBfs ? String(Number(municipalityBfs)) : "";
+  const bfsPadded = bfsNumeric ? bfsNumeric.padStart(4, "0") : "";
   const needle = normalize(municipalityName);
 
   // PxWeb municipality labels are primarily names, while the machine values can
@@ -1110,10 +1113,11 @@ async function fetchPopulationValuesPxWeb(metadata, municipalityBfs, municipalit
       });
     }
   }
-  if (regionIndex < 0 && bfs) {
+  if (regionIndex < 0 && bfsNumeric) {
     regionIndex = values.findIndex((value) => {
-      const code = String(value || "");
-      return code === bfs || code.endsWith(`.${bfs}`) || code.endsWith(`-${bfs}`) || new RegExp(`(^|\D)${bfs}(\D|$)`).test(code);
+      const code = String(value || "").trim();
+      const digits = code.replace(/\D/g, "");
+      return code === bfsNumeric || code === bfsPadded || digits === bfsNumeric || digits === bfsPadded;
     });
   }
   if (regionIndex < 0) return null;
@@ -1145,7 +1149,7 @@ async function fetchPopulationValuesPxWeb(metadata, municipalityBfs, municipalit
   const data = await fetchJson(metadata.__endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, response: { format: "json-stat2" } }),
+    body: JSON.stringify({ query, response: { format: "json-stat" } }),
   }, 6500);
 
   const numericValues = Array.isArray(data.value)
@@ -1162,8 +1166,8 @@ async function fetchPopulationValuesPxWeb(metadata, municipalityBfs, municipalit
 }
 
 async function fetchPopulationGrowthPxWeb(municipalityBfs, municipalityName) {
-  // V5.5.3: Metadata-first. Wir lesen zuerst die tatsächlichen Dimensionen und
-  // Gemeinde-Codes des aktuellen BFS-Cubes und senden erst danach die Datenabfrage.
+  // V5.5.4: Offizieller Gemeinde-Zeitreihen-Cube + Metadata-first. Wir lesen zuerst
+  // die tatsächlichen Dimensionen und verwenden die BFS-Gemeindenummer als PxWeb-Code.
   // Dadurch hängt HomeIQ nicht von vermuteten PxWeb-Codes ab.
   for (const endpoint of PXWEB_POPULATION_SERIES_ENDPOINTS) {
     try {
