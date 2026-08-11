@@ -224,6 +224,7 @@ export type AnalysisResult = {
   annualAmortization: number;
   annualCashflow: number;
   monthlyCashflow: number;
+  cashOnCashReturn: number;
   equityReturn: number;
   ltv: number;
   pricePerSqm: number;

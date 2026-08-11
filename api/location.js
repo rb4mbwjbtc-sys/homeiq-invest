@@ -1129,25 +1129,34 @@ export default async function handler(req, res) {
     const transitClassScore = { A: 95, B: 82, C: 68, D: 54 }[transitClass] || null;
     const vacancyRiskForScore = actual.vacancyRisk ?? 50;
     const municipalityDemand = Math.round(clamp(100 - vacancyRiskForScore * 0.78 + (transitClassScore ? (transitClassScore - 50) * 0.22 : 0)));
-    // V5.5: Mikrolage wie V5.3 rein rechnerisch; sie wird im Frontend nur informativ angezeigt und nicht doppelt im Lage-Gesamtscore gewichtet.
-    // Verwendet ausschliesslich bereits erfolgreich geladene Distanzen. Lärm und Leerstand bleiben separat, um Doppelzählungen zu vermeiden.
-    const stepScore = (meters, bands) => {
+    // V5.6: Mikrolage als reiner Informationswert aus denselben bereits
+    // vorhandenen Distanz-Scores wie die sichtbaren Lagefaktoren. Keine
+    // zusätzliche Datenquelle und keine zweite Bewertungslogik.
+    const piecewiseDistanceScore = (meters, points) => {
       if (meters == null || !Number.isFinite(meters)) return null;
-      for (const [limit, score] of bands) if (meters <= limit) return score;
-      return bands[bands.length - 1][1];
+      if (meters <= points[0][0]) return points[0][1];
+      for (let i = 1; i < points.length; i += 1) {
+        const [x1, y1] = points[i - 1];
+        const [x2, y2] = points[i];
+        if (meters <= x2) {
+          const t = (meters - x1) / Math.max(x2 - x1, 1e-9);
+          return Math.round(clamp(y1 + (y2 - y1) * t));
+        }
+      }
+      return points[points.length - 1][1];
     };
     const microComponents = [
-      { key: "shopping", label: "Einkauf", weight: 0.30, meters: shoppingMeters, score: stepScore(shoppingMeters, [[250,100],[500,90],[1000,75],[2000,55],[3000,40],[Infinity,30]]) },
-      { key: "school", label: "Schule/Betreuung", weight: 0.25, meters: schoolMeters, score: stepScore(schoolMeters, [[300,100],[500,90],[1000,75],[2000,55],[3000,45],[Infinity,35]]) },
-      { key: "transit", label: "ÖV", weight: 0.25, meters: nearestPublicTransportMeters, score: stepScore(nearestPublicTransportMeters, [[150,100],[300,90],[500,80],[1000,60],[1500,50],[Infinity,40]]) },
-      { key: "motorway", label: "Autobahn", weight: 0.20, meters: motorwayMeters, score: stepScore(motorwayMeters, [[300,60],[750,80],[3000,100],[5000,85],[10000,65],[Infinity,45]]) },
+      { key: "transit", label: "ÖV", weight: 0.25, meters: nearestPublicTransportMeters, score: piecewiseDistanceScore(nearestPublicTransportMeters, [[150,100],[300,95],[500,90],[750,82],[1000,75],[1500,62],[2500,45],[4000,25],[6000,10]]) },
+      { key: "shopping", label: "Einkauf", weight: 0.30, meters: shoppingMeters, score: piecewiseDistanceScore(shoppingMeters, [[300,100],[500,95],[800,85],[1200,72],[2000,55],[3000,40],[5000,20],[10000,5]]) },
+      { key: "school", label: "Schule/Betreuung", weight: 0.25, meters: schoolMeters, score: piecewiseDistanceScore(schoolMeters, [[300,100],[500,95],[800,85],[1200,75],[2000,60],[3000,45],[5000,25],[10000,10]]) },
+      { key: "motorway", label: "Verkehr", weight: 0.20, meters: motorwayMeters, score: piecewiseDistanceScore(motorwayMeters, [[1000,100],[2000,90],[3000,80],[5000,65],[7000,50],[10000,35],[15000,20],[25000,10]]) },
     ];
     const availableMicro = microComponents.filter((c) => c.score != null);
     const microWeight = availableMicro.reduce((sum, c) => sum + c.weight, 0);
     const microLocation = microWeight > 0 ? Math.round(availableMicro.reduce((sum, c) => sum + c.score * c.weight, 0) / microWeight) : 50;
-    const microLocationAvailable = availableMicro.length >= 2;
+    const microLocationAvailable = microWeight >= 0.5;
     const microLocationCoverage = Math.round(microWeight * 100);
-    const microLocationSummary = microLocationAvailable ? `Aus vorhandenen Standortdaten berechnet · Datenabdeckung ${microLocationCoverage}%` : null;
+    const microLocationSummary = microLocationAvailable ? `Aus ÖV, Einkauf, Schule und Verkehr abgeleitet · Datenabdeckung ${microLocationCoverage}%` : null;
 
     const metrics = {
       publicTransportMinutes: actual.publicTransportMinutes ?? 12,

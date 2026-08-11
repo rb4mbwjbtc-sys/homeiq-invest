@@ -114,7 +114,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.5</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.6</span>
             <h1>{input.title}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -149,7 +149,7 @@ export function Result() {
                 <div key={key}>
                   <div>
                     <span>{factorLabels[key as keyof typeof factorLabels]}</span>
-                    <small>Gewicht {factorWeights[key as keyof typeof factorWeights]} · {key === "objectQuality" ? "Baujahr, Sanierungen, Zustand und Standard" : key === "marketability" ? "Vermietbarkeit, Nachfrage, Grundriss und Ausstattung" : key === "location" ? "ÖV, Einkauf, Schule, Verkehr, Lärm, Nachfrage und Leerstand" : key === "netYield" ? "Miete abzüglich Betrieb und Unterhalt" : "Cashflow im Verhältnis zum Eigenkapital"}</small>
+                    <small>Gewicht {factorWeights[key as keyof typeof factorWeights]} · {key === "objectQuality" ? "Baujahr, Sanierungen, Zustand und Standard" : key === "marketability" ? "Grundriss, Wohnfläche und vermietungsrelevante Ausstattung" : key === "location" ? "ÖV, Einkauf, Schule, Verkehr, Lärm und Leerstand" : key === "netYield" ? "Nettoertrag im Verhältnis zur Gesamtinvestition" : "Nettoertrag nach Zins im Verhältnis zum Eigenkapital"}</small>
                   </div>
                   <div className="bar">
                     <i style={{ width: `${value}%`, background: scoreColor(value) }} />
@@ -229,7 +229,7 @@ export function Result() {
                     }}
                   />
                 </div>
-                <small>{factor.detail}{factor.label === "Mikrolage" ? " · Informationswert, nicht zusätzlich gewichtet" : ""}</small>
+                <small>{factor.detail}{["Mikrolage", "Nachfrage"].includes(factor.label) ? " · Informationswert, nicht zusätzlich gewichtet" : ""}</small>
               </div>
             ))}
           </div>
@@ -275,7 +275,10 @@ export function Result() {
               ["Amortisation / Jahr", money(result.annualAmortization)],
               ["Jahresmietertrag", money(result.annualRent)],
               ["Parkplatzmiete / Monat", money(input.propertyType === "mfh" ? input.rentalUnits.reduce((sum, unit) => sum + (unit.parkingMonthlyRent || 0), 0) : (input.parkingMonthlyRent || 0))],
-              ["Bruttorendite", percent(result.grossYield)],
+              ["Bruttorendite (Kaufpreis)", percent(result.grossYield)],
+              ["Nettorendite (Gesamtinvest.)", percent(result.netYield)],
+              ["Eigenkapitalrendite", percent(result.equityReturn)],
+              ["Cash-on-Cash-Rendite", percent(result.cashOnCashReturn)],
               ["Wohnfläche", `${number(input.livingArea)} m²`],
             ].map(([label, value]) => (
               <div key={label}>
@@ -299,7 +302,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.5</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.6</span></div>
             <h1>{input.title}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
@@ -314,9 +317,10 @@ export function Result() {
           <h2>KENNZAHLEN & FINANZIERUNG</h2>
           <div className="print-metrics">
             {[
-              ["Bruttorendite", percent(result.grossYield)],
-              ["Nettorendite", percent(result.netYield)],
+              ["Bruttorendite (Kaufpreis)", percent(result.grossYield)],
+              ["Nettorendite (Gesamtinvest.)", percent(result.netYield)],
               ["Eigenkapitalrendite", percent(result.equityReturn)],
+              ["Cash-on-Cash-Rendite", percent(result.cashOnCashReturn)],
               ["Cashflow / Monat", money(result.monthlyCashflow)],
               ["Cashflow / Jahr", money(result.annualCashflow)],
               ["Belehnung (LTV)", percent(result.ltv)],

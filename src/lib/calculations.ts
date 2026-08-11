@@ -38,16 +38,23 @@ function objectQualityScore(input: AnalysisInput) {
 }
 
 function marketabilityScore(input: AnalysisInput) {
-  let score = 38;
+  // V5.6: Marktfähigkeit bewertet nur die konkrete Vermietbarkeit des Objekts.
+  // Standort-Nachfrage und Leerstand gehören zur Lageanalyse und werden hier
+  // bewusst nicht nochmals eingerechnet.
+  let score = 25;
   const f = new Set((Array.isArray(input.features) ? input.features : []).map((item) => item.toLowerCase()));
-  if ([...f].some((x) => x.includes("balkon") || x.includes("terrasse") || x.includes("garten"))) score += 10;
-  if ([...f].some((x) => x.includes("lift"))) score += 7;
-  if (input.parkingSpaces > 0) score += Math.min(12, 6 + input.parkingSpaces * 2);
-  if ([...f].some((x) => x.includes("keller") || x.includes("reduit"))) score += 5;
-  if (input.rooms >= 2.5 && input.rooms <= 4.5) score += 8;
-  if (input.livingArea >= 55 && input.livingArea <= 125) score += 7;
-  score += clamp((input.location.municipalityDemand - 50) * 0.12, -6, 6);
-  score += clamp((50 - input.location.vacancyRisk) * 0.10, -5, 5);
+  const hasOutdoor = [...f].some((x) => x.includes("balkon") || x.includes("terrasse") || x.includes("garten"));
+  const hasLift = [...f].some((x) => x.includes("lift"));
+  const hasStorage = [...f].some((x) => x.includes("keller") || x.includes("reduit"));
+
+  if (hasOutdoor) score += 15;
+  if (hasLift) score += 10;
+  if (input.parkingSpaces > 0) score += 15;
+  if (hasStorage) score += 5;
+
+  score += input.rooms >= 2.5 && input.rooms <= 4.5 ? 15 : input.rooms >= 1.5 && input.rooms <= 5.5 ? 10 : 5;
+  score += input.livingArea >= 55 && input.livingArea <= 125 ? 15 : input.livingArea >= 40 && input.livingArea <= 150 ? 10 : 5;
+
   return Math.round(clamp(score));
 }
 
@@ -60,15 +67,23 @@ export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
     ? input.rentalUnits.reduce((sum, unit) => sum + unit.currentMonthlyRent + (unit.parkingMonthlyRent || 0), 0)
     : input.monthlyRent + (input.parkingMonthlyRent || 0);
   const annualRent = monthlyRent * 12;
-  const grossYield = totalInvestment > 0 ? (annualRent / totalInvestment) * 100 : 0;
+  // Bruttorendite als klassische Vergleichskennzahl auf den Kaufpreis.
+  const grossYield = input.purchasePrice > 0 ? (annualRent / input.purchasePrice) * 100 : 0;
   const netIncomeBeforeFinancing = annualRent - input.annualOperatingCosts - input.annualMaintenance;
+  // Konservative Nettorendite auf dem effektiv gebundenen Gesamtinvestment.
   const netYield = totalInvestment > 0 ? (netIncomeBeforeFinancing / totalInvestment) * 100 : 0;
   const annualInterest = mortgage * input.interestRate / 100;
   const annualAmortization = mortgage * input.amortizationRate / 100;
   const annualCashflow = netIncomeBeforeFinancing - annualInterest - annualAmortization;
   const monthlyCashflow = annualCashflow / 12;
-  const equityReturn = input.equity > 0 ? annualCashflow / input.equity * 100 : 0;
-  const ltv = totalInvestment > 0 ? mortgage / totalInvestment * 100 : 0;
+  // Eigenkapitalrendite: Nettoertrag nach Finanzierungskosten, Amortisation ist
+  // Vermögensumschichtung und wird nicht als Aufwand abgezogen.
+  const annualEquityIncome = netIncomeBeforeFinancing - annualInterest;
+  const equityReturn = input.equity > 0 ? annualEquityIncome / input.equity * 100 : 0;
+  // Cash-on-Cash bleibt als Liquiditätskennzahl nach Zins und Amortisation sichtbar.
+  const cashOnCashReturn = input.equity > 0 ? annualCashflow / input.equity * 100 : 0;
+  // Belehnung bezieht sich auf den Kaufpreis/Objektwert, nicht auf Erwerbsnebenkosten.
+  const ltv = input.purchasePrice > 0 ? mortgage / input.purchasePrice * 100 : 0;
   const totalArea = input.propertyType === "mfh" && input.rentalUnits.length
     ? input.rentalUnits.reduce((sum, unit) => sum + unit.livingArea, 0)
     : input.livingArea;
@@ -111,7 +126,7 @@ export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
   if (marketAnalysis.marketRentAvailable && marketAnalysis.rentDifferencePercent >= 6) positives.push("Erkennbares Marktmietpotenzial");
   if (ltv > 80) negatives.push("Hohe Belehnung");
   if (scoreBreakdown.objectQuality < 50) negatives.push("Erhöhter Sanierungs- oder Unterhaltsbedarf möglich");
-  if (scoreBreakdown.marketability < 50) negatives.push("Eingeschränkte Vermietbarkeit oder Marktnachfrage");
+  if (scoreBreakdown.marketability < 50) negatives.push("Eingeschränkte Vermietbarkeit des konkreten Objekts");
 
-  return { input, totalInvestment, mortgage, annualRent, grossYield, netYield, annualInterest, annualAmortization, annualCashflow, monthlyCashflow, equityReturn, ltv, pricePerSqm, score, scoreBreakdown, rating, recommendation, positives, negatives, locationAnalysis, marketAnalysis };
+  return { input, totalInvestment, mortgage, annualRent, grossYield, netYield, annualInterest, annualAmortization, annualCashflow, monthlyCashflow, cashOnCashReturn, equityReturn, ltv, pricePerSqm, score, scoreBreakdown, rating, recommendation, positives, negatives, locationAnalysis, marketAnalysis };
 }

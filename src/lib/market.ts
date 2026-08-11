@@ -130,11 +130,24 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
     },
   ];
 
-  // V5.5: Mikrolage bleibt als transparenter Informations-Subscore sichtbar,
-  // fliesst aber NICHT erneut in den Lage-Gesamtscore ein. Die Mikrolage
-  // wird bereits aus ÖV, Einkauf, Schule/Betreuung und Autobahn abgeleitet.
-  // Eine zusätzliche Gewichtung würde diese Faktoren doppelt zählen.
-  const baseWeights = [0.16, 0.10, 0.08, 0.08, 0.14, 0.18, 0.14, 0];
+  // V5.6: Mikrolage wird rein aus den bereits berechneten Einzel-Scores
+  // abgeleitet. Damit gibt es keine zweite Distanzlogik.
+  const microSourceWeights = [0.25, 0.30, 0.25, 0.20]; // ÖV, Einkauf, Schule, Verkehr
+  const microAvailableWeight = raw.slice(0, 4).reduce((sum, factor, index) => sum + (factor.available ? microSourceWeights[index] : 0), 0);
+  const microScore = microAvailableWeight > 0
+    ? Math.round(raw.slice(0, 4).reduce((sum, factor, index) => sum + (factor.available ? factor.score * microSourceWeights[index] : 0), 0) / microAvailableWeight)
+    : 50;
+  raw[7] = {
+    ...raw[7],
+    available: microAvailableWeight >= 0.5,
+    score: microScore,
+    detail: microAvailableWeight >= 0.5 ? `Aus ÖV, Einkauf, Schule und Verkehr abgeleitet · Datenabdeckung ${Math.round(microAvailableWeight * 100)}%` : "Nicht verfügbar",
+  };
+
+  // Nachfrage bleibt als transparenter Indikator aus Leerstand + ÖV sichtbar,
+  // wird aber nicht zusätzlich gewichtet. Sonst würden dieselben Daten doppelt
+  // in den Lage-Score einfliessen. Mikrolage ist ebenfalls Informationswert.
+  const baseWeights = [0.16, 0.10, 0.08, 0.08, 0.14, 0, 0.14, 0];
   const baseWeightTotal = baseWeights.reduce((sum, weight) => sum + weight, 0);
   const weights = baseWeights.map((weight) => weight / baseWeightTotal);
   const availableWeight = raw.reduce((sum, factor, index) => sum + (factor.available ? weights[index] : 0), 0);
@@ -149,8 +162,8 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
   }));
   const availableFactors = raw.filter((factor) => factor.available).length;
   const dataCoverage = Math.round(availableWeight * 100);
-  const strengths = factors.filter((factor) => factor.label !== "Mikrolage" && factor.score >= 75 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
-  const risks = factors.filter((factor) => factor.label !== "Mikrolage" && factor.score > 0 && factor.score < 50 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
+  const strengths = factors.filter((factor) => !["Mikrolage", "Nachfrage"].includes(factor.label) && factor.score >= 75 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
+  const risks = factors.filter((factor) => !["Mikrolage", "Nachfrage"].includes(factor.label) && factor.score > 0 && factor.score < 50 && factor.detail !== "Nicht verfügbar").map((factor) => `${factor.label}: ${factor.detail}`);
   const baseRating = score >= 80 ? "Sehr gute Lage" : score >= 65 ? "Gute Lage" : score >= 50 ? "Durchschnittliche Lage" : "Schwache Lage";
   const rating = dataCoverage < 40 ? "Lagebewertung eingeschränkt" : baseRating;
   return { score, rating, factors, strengths, risks, dataCoverage, availableFactors, totalFactors: raw.length };
