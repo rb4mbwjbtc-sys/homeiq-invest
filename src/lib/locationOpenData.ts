@@ -4,13 +4,6 @@ type LocationApiResponse = OpenDataLocationReport & {
   metrics: AnalysisInput["location"];
 };
 
-export type MicroLocationResponse = {
-  available: boolean;
-  profile: OpenDataLocationReport["evidence"]["microLocationProfile"];
-  loadedAt?: string;
-  source?: string;
-};
-
 const EMPTY_MARKET: OpenDataMarketReport = {
   pricePerSqm: null,
   rentPerSqm: null,
@@ -102,14 +95,4 @@ export async function loadSwissOpenDataLocation(
     ...locationResult.value,
     market,
   };
-}
-
-
-export async function loadSwissMicroLocation(lat: number, lon: number): Promise<MicroLocationResponse> {
-  try {
-    return await fetchJsonWithTimeout<MicroLocationResponse>(`/api/micro-location?${new URLSearchParams({ lat: String(lat), lon: String(lon) })}`, 4800);
-  } catch {
-    // Mikrolage ist optional. Sie darf die funktionierende Standortpipeline niemals blockieren.
-    return { available: false, profile: null };
-  }
 }

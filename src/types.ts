@@ -103,14 +103,9 @@ export type OpenDataLocationReport = {
     microLocationSummary?: string | null;
     microLocationProfile?: {
       score: number;
-      dataCoverage?: number;
-      summary: string;
-      components: {
-        green: { available?: boolean; score: number; nearestMeters: number | null };
-        water: { available?: boolean; score: number | null; nearestMeters: number | null };
-        family: { available?: boolean; score: number; nearestMeters: number | null };
-        convenience: { available?: boolean; score: number; nearestMeters: number | null };
-      };
+      summary: string | null;
+      coverage?: number;
+      components: Record<string, { score: number | null; nearestMeters: number | null; weight: number }>;
     } | null;
     searchRadiusKm?: number;
     categoryRadiusKm?: {

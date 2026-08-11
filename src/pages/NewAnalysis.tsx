@@ -17,7 +17,7 @@ import type { AnalysisInput, PropertyType, RentalUnit } from "../types";
 import { findAnalysis, saveAnalysis } from "../lib/storage";
 import { analyseLocation, analyseMarket } from "../lib/market";
 import { money } from "../lib/format";
-import { loadSwissOpenDataLocation, loadSwissMicroLocation } from "../lib/locationOpenData";
+import { loadSwissOpenDataLocation } from "../lib/locationOpenData";
 
 const objectTypes = [
   { id: "wohnung", label: "Eigentumswohnung", icon: Building2 },
@@ -213,28 +213,6 @@ export function NewAnalysis() {
       setLocationLoaded(true);
       setMarketValueGenerated(null);
       setMarketRentGenerated(null);
-
-      // V5.3: Mikrolage wird nachgelagert und optional geladen.
-      // Der Haupt-Ladevorgang ist an dieser Stelle bereits erfolgreich abgeschlossen.
-      void loadSwissMicroLocation(report.address.lat, report.address.lon).then((micro) => {
-        if (!micro.available || !micro.profile || micro.profile.score == null) return;
-        setForm((previous) => {
-          if (!previous.openDataLocation) return previous;
-          return {
-            ...previous,
-            location: { ...previous.location, microLocation: micro.profile!.score },
-            openDataLocation: {
-              ...previous.openDataLocation,
-              evidence: {
-                ...previous.openDataLocation.evidence,
-                microLocationAvailable: true,
-                microLocationSummary: micro.profile!.summary,
-                microLocationProfile: micro.profile,
-              },
-            },
-          };
-        });
-      });
     } catch (error) {
       // Bei einem erneuten Laden bleiben bereits erfolgreich geladene Daten
       // sichtbar. Ein temporärer Quellenfehler löscht keine gute Analyse.

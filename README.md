@@ -1,13 +1,17 @@
-# HomeIQ Independent V5.3 – Isolated Micro-Location
+# HomeIQ Invest V5.3
 
-V5.3 baut bewusst auf der stabilen V5.2 auf. Die funktionierende Kernpipeline für Adresse/GWR, ÖV, Einkauf, Schule/Betreuung, Autobahn, Leerstand und Lärm bleibt unverändert.
+Basis: stabile V5.2. Alle funktionierenden Standort- und Marktdaten-Pipelines bleiben unverändert.
 
-Neu in V5.3:
-- Mikrolage ist aus `/api/location` herausgelöst und kann die Standortanalyse nicht mehr blockieren.
-- Ein Klick auf „Standortdaten automatisch laden“ lädt zuerst die stabile Kernpipeline.
-- Nach erfolgreichem Kern-Load wird die Mikrolage separat und optional über `/api/micro-location` geladen.
-- Scheitert oder timed-out die Mikrolage, bleiben alle Kern-Standortdaten sichtbar; es erscheint kein Gesamtfehler wegen Mikrolage.
-- Mikrolage nutzt eine einzige kompakte OSM/Overpass-Abfrage bis 2 km statt mehrerer Module/Requests.
-- Vier einfache Faktoren: Grün & Natur 30 %, Gewässer 20 % (Bonus, bei Fehlen aus Gewichtung entfernt), Freizeit & Familie 25 %, Nahversorgung 25 %.
-- Distanzbasierte, nachvollziehbare Schwellen statt komplexer Umfeldmodelle.
-- Mikrolage wird nur in den Lage-Score aufgenommen, wenn die optionale Abfrage erfolgreich war.
+## V5.3 – robuste Mikrolage ohne zusätzliche Datenabfrage
+
+Die Mikrolage wird ausschliesslich aus bereits geladenen Standortdaten berechnet. Es gibt keinen separaten Mikrolage-/Overpass-Aufruf mehr.
+
+Gewichtung:
+- Einkauf: 30 %
+- Schule / Betreuung: 25 %
+- ÖV-Distanz: 25 %
+- Autobahnanschluss: 20 %
+
+Fehlende Werte werden aus dem Nenner entfernt; die vorhandenen Gewichte werden proportional normalisiert. Die Datenabdeckung der Mikrolage wird separat ausgewiesen. Lärm und Leerstand werden nicht nochmals in die Mikrolage eingerechnet, da sie eigene Lagefaktoren sind.
+
+Autobahnanschluss nutzt einen Sweet-Spot: unmittelbare Autobahnnähe ist nicht automatisch optimal; 0.75–3 km erhält die beste Bewertung.

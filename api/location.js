@@ -1129,10 +1129,25 @@ export default async function handler(req, res) {
     const transitClassScore = { A: 95, B: 82, C: 68, D: 54 }[transitClass] || null;
     const vacancyRiskForScore = actual.vacancyRisk ?? 50;
     const municipalityDemand = Math.round(clamp(100 - vacancyRiskForScore * 0.78 + (transitClassScore ? (transitClassScore - 50) * 0.22 : 0)));
-    // V5.3: Mikrolage wird absichtlich NICHT mehr in der Hauptpipeline geladen.
-    // Dadurch kann eine langsame optionale OSM-Umfeldabfrage die stabilen Standortdaten nicht blockieren.
-    const microProfile = null;
-    const microLocation = 50;
+    // V5.3: robuste, rein rechnerische Mikrolage. Keine zusätzliche Datenquelle / kein zusätzlicher API-Aufruf.
+    // Verwendet ausschliesslich bereits erfolgreich geladene Distanzen. Lärm und Leerstand bleiben separat, um Doppelzählungen zu vermeiden.
+    const stepScore = (meters, bands) => {
+      if (meters == null || !Number.isFinite(meters)) return null;
+      for (const [limit, score] of bands) if (meters <= limit) return score;
+      return bands[bands.length - 1][1];
+    };
+    const microComponents = [
+      { key: "shopping", label: "Einkauf", weight: 0.30, meters: shoppingMeters, score: stepScore(shoppingMeters, [[250,100],[500,90],[1000,75],[2000,55],[3000,40],[Infinity,30]]) },
+      { key: "school", label: "Schule/Betreuung", weight: 0.25, meters: schoolMeters, score: stepScore(schoolMeters, [[300,100],[500,90],[1000,75],[2000,55],[3000,45],[Infinity,35]]) },
+      { key: "transit", label: "ÖV", weight: 0.25, meters: nearestPublicTransportMeters, score: stepScore(nearestPublicTransportMeters, [[150,100],[300,90],[500,80],[1000,60],[1500,50],[Infinity,40]]) },
+      { key: "motorway", label: "Autobahn", weight: 0.20, meters: motorwayMeters, score: stepScore(motorwayMeters, [[300,60],[750,80],[3000,100],[5000,85],[10000,65],[Infinity,45]]) },
+    ];
+    const availableMicro = microComponents.filter((c) => c.score != null);
+    const microWeight = availableMicro.reduce((sum, c) => sum + c.weight, 0);
+    const microLocation = microWeight > 0 ? Math.round(availableMicro.reduce((sum, c) => sum + c.score * c.weight, 0) / microWeight) : 50;
+    const microLocationAvailable = availableMicro.length >= 2;
+    const microLocationCoverage = Math.round(microWeight * 100);
+    const microLocationSummary = microLocationAvailable ? `Aus vorhandenen Standortdaten berechnet · Datenabdeckung ${microLocationCoverage}%` : null;
 
     const metrics = {
       publicTransportMinutes: actual.publicTransportMinutes ?? 12,
@@ -1164,6 +1179,7 @@ export default async function handler(req, res) {
       shoppingD.diagnostic,
       osmSchoolD.diagnostic,
       motorwayD.diagnostic,
+      microD.diagnostic,
     ];
 
     const body = {
@@ -1195,9 +1211,14 @@ export default async function handler(req, res) {
         nearestShoppingMeters: shoppingMeters,
         nearestSchoolMeters: schoolMeters,
         nearestMotorwayJunctionMeters: motorwayMeters,
-        microLocationAvailable: false,
-        microLocationSummary: null,
-        microLocationProfile: null,
+        microLocationAvailable,
+        microLocationSummary,
+        microLocationProfile: microLocationAvailable ? {
+          score: microLocation,
+          summary: microLocationSummary,
+          coverage: microLocationCoverage,
+          components: Object.fromEntries(microComponents.map((c) => [c.key, { score: c.score, nearestMeters: c.meters, weight: c.weight }]))
+        } : null,
         searchRadiusKm: Math.max(10, radiusBucket(shoppingMeters, [1, 2.5, 5, 10, 15, 20]) || 0, radiusBucket(schoolMeters, [1, 2.5, 5, 10, 15, 20]) || 0, radiusBucket(motorwayMeters, [5, 10, 20, 35, 50]) || 0),
         categoryRadiusKm: {
           transit: nearestPublicTransportMeters == null ? null : Math.max(1, Math.ceil(nearestPublicTransportMeters / 1000)),
@@ -1227,7 +1248,7 @@ export default async function handler(req, res) {
         { name: "BAFU / BAV via GeoAdmin", detail: "Strassen- und Bahnlärm werden getrennt für Tag/Nacht abgefragt. Jeder BAFU-Rasterlayer läuft unabhängig über GeoAdmin WMS GetFeatureInfo; BAV-Eisenbahn-Immissionen zusätzlich über GeoAdmin Identify. Suche am Objekt sowie 25/50/100/250 m. Entfernung reduziert nur den negativen Einfluss, nicht den dB-Wert." },
         { name: "OpenTransportData / transport.opendata.ch", detail: "Nächster ÖV-Servicepunkt" },
         { name: "opendata.swiss", detail: "Offizielle kantonale/kommunale Schul-, Betreuungs- und Leerstandsdaten, sofern maschinenlesbar verfügbar" },
-        { name: "OpenStreetMap", detail: "Einkauf, Schule/Betreuung und Autobahnanschlüsse über Photon/Overpass. Mikrolage zusätzlich aus Grün/Natur, Gewässern, Freizeit, Wohnumfeld und lokalen Dienstleistungen im Umkreis bis 2 km." },
+        { name: "OpenStreetMap", detail: "Einkauf, Schule/Betreuung und Autobahnanschlüsse über Photon/Overpass. Mikrolage wird ohne zusätzliche Abfrage aus den bereits geladenen Distanzen zu Einkauf, Schule/Betreuung, ÖV und Autobahn berechnet." },
       ],
     };
 
