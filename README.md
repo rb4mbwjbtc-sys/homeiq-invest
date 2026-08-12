@@ -35,10 +35,12 @@ Basis: stabile V5.5 ohne Bevölkerungsabfrage. Die funktionierende Standortdaten
 - Zwischenwerte werden linear interpoliert.
 - Lagequalität, Objektqualität, Marktfähigkeit sowie die Hauptgewichtungen 35/20/25/12/8 bleiben unverändert.
 
-## V5.7.7
-- ÖV-Abfrage stabilisiert: echte Stationskoordinaten, eigene Haversine-Distanz und Schutz vor falschen 0-m-Werten.
-- transport.opendata.ch wird zuerst kurz abgefragt; danach direkter OSM/Overpass-Fallback mit 2/5/10 km.
-- Overpass verwendet den ersten gültigen Endpoint statt auf alle Server zu warten.
-- OSM-Fallbacks haben ein gemeinsames Zeitbudget und keine mehrfachen langen Retry-Kaskaden mehr.
-- Jede Standortquelle hat ein eigenes maximales Zeitbudget; Teilresultate bleiben verfügbar, wenn eine Quelle langsam ist.
-- Bestehende Score-, Rendite-, Lärm-, Leerstands-, Einkaufs-, Schul- und Autobahnlogik wurde inhaltlich nicht verändert.
+## V5.7.8
+- Basis ist V5.7.6.
+- ÖV-Abfrage bleibt primär über transport.opendata.ch und verwendet wieder ein grosszügigeres Zeitfenster.
+- Falsche 0-m-Werte werden verhindert, indem die Haltestellendistanz immer aus den Stationskoordinaten selbst berechnet wird.
+- Nur bei wirklich praktisch identischen Koordinaten kann 0–2 m entstehen.
+- Bewährter OSM-Fallback bleibt erhalten; keine aggressive First-Success-/Global-Budget-Logik aus V5.7.7.
+- Upstream-Zeitfenster wurden moderat erhöht, damit Schule, Einkauf, Autobahn und ÖV wieder zuverlässiger gefunden werden.
+- Teilresultate bleiben erhalten, wenn einzelne Quellen nicht antworten.
+- Score-, Rendite-, Lage-, Objektqualitäts- und Marktfähigkeitslogik bleiben unverändert gegenüber V5.7.6.
