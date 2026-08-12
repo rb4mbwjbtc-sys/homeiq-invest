@@ -1,0 +1,5 @@
+HomeIQ V5.7.10
+Basis: V5.7.6
+Gezielte Änderung: ÖV-Distanzberechnung auf bestehende OSM/Photon/Overpass-Pipeline.
+Unverändert: alle übrigen Standort-, Score- und Renditelogiken.
+Syntaxcheck api/location.js und api/market.js: OK.

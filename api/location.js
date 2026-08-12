@@ -596,40 +596,22 @@ const haversine = (a, b) => {
 };
 
 async function fetchNearestTransit(geo) {
-  // transport.opendata.ch dokumentiert `type=station` nur für Textsuche.
-  // Bei Koordinatensuche werden deshalb bewusst nur x/y gesendet. Zudem
-  // dürfen sehr nahe Haltestellen (<20 m) nicht herausgefiltert werden.
-  try {
-    const params = new URLSearchParams({ x: String(geo.lat), y: String(geo.lon) });
-    const payload = await fetchJson(`${TRANSPORT_LOCATIONS}?${params}`, {}, 4200);
-    const stations = Array.isArray(payload.stations) ? payload.stations : [];
-    let nearest = Infinity;
-    for (const station of stations) {
-      const apiDistance = Number(station.distance);
-      if (Number.isFinite(apiDistance) && apiDistance >= 0) {
-        nearest = Math.min(nearest, apiDistance);
-        continue;
-      }
-      const lat = Number(station.coordinate?.x ?? station.coordinates?.x);
-      const lon = Number(station.coordinate?.y ?? station.coordinates?.y);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      const distance = haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon });
-      nearest = Math.min(nearest, distance);
-    }
-    if (Number.isFinite(nearest)) return Math.round(nearest);
-  } catch (_) {
-    // Fallback folgt unten. Die Standortanalyse soll bei einem temporären
-    // Ausfall der inoffiziellen Transport-API nicht ohne ÖV-Distanz bleiben.
-  }
+  // V5.7.100: gleiche OSM-Distanzlogik wie Einkauf, Schule und Autobahn.
+  const result = await nearestWithOsmFallback(
+    geo,
+    transitQuery,
+    [
+      "highway:bus_stop",
+      "public_transport:platform",
+      "public_transport:station",
+      "railway:station",
+      "railway:halt",
+      "railway:tram_stop"
+    ],
+    [2, 5, 10]
+  );
 
-  const transitQuery = (r) => `
-    nwr(around:${r},{{LAT}},{{LON}})[public_transport=platform];
-    nwr(around:${r},{{LAT}},{{LON}})[highway=bus_stop];
-    nwr(around:${r},{{LAT}},{{LON}})[railway~"station|halt|tram_stop"];`;
-  const fallback = await nearestWithOsmFallback(geo, transitQuery, [
-    "public_transport:platform", "highway:bus_stop", "railway:station", "railway:halt", "railway:tram_stop"
-  ], [2, 5, 10]);
-  return fallback?.meters ?? null;
+  return result?.meters ?? null;
 }
 
 async function overpassNearest(geo, queryBody, maxRadiusMeters, timeoutMs = 4200) {
@@ -1157,7 +1139,7 @@ export default async function handler(req, res) {
     const transitClass = parseTransitClass(layerMap[LAYERS.transitClass]);
 
     const [transitD, noiseD, vacancyD, officialSchoolD, shoppingD, osmSchoolD, motorwayD] = await Promise.all([
-      runDiagnostic("Nächster ÖV-Punkt", "OpenTransportData", () => fetchNearestTransit(geo)),
+      runDiagnostic("Nächster ÖV-Punkt", "OpenStreetMap / Photon + Overpass", () => fetchNearestTransit(geo)),
       runDiagnostic("Lärm Strasse/Bahn Tag+Nacht", "BAFU / BAV via GeoAdmin", () => fetchNoiseBundle(geo)),
       runDiagnostic("Leerwohnungsziffer", "BFS / opendata.swiss", () => fetchVacancyRate(municipalityBfs, municipalityName)),
       runDiagnostic("Schule / Betreuung (offiziell)", "opendata.swiss", () => fetchOfficialEducationPoi(geo, municipalityName)),
