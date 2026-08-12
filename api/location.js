@@ -84,6 +84,29 @@ function errorStatus(error) {
   return "error";
 }
 
+const TIMEOUT_VALUE = Symbol("homeiq-timeout");
+
+async function runDiagnosticBounded(name, source, fn, budgetMs = 8500) {
+  const timeoutPromise = new Promise((resolve) => {
+    setTimeout(() => resolve(TIMEOUT_VALUE), budgetMs);
+  });
+  const result = await Promise.race([
+    runDiagnostic(name, source, fn),
+    timeoutPromise,
+  ]);
+  if (result !== TIMEOUT_VALUE) return result;
+  return {
+    value: null,
+    diagnostic: {
+      name,
+      source,
+      status: "timeout",
+      detail: `Zeitbudget von ${budgetMs} ms überschritten; Teilresultate werden trotzdem verwendet.`,
+      durationMs: budgetMs,
+    },
+  };
+}
+
 async function runDiagnostic(name, source, fn) {
   const started = Date.now();
   try {
@@ -596,62 +619,93 @@ const haversine = (a, b) => {
 };
 
 async function fetchNearestTransit(geo) {
-  // transport.opendata.ch dokumentiert `type=station` nur für Textsuche.
-  // Bei Koordinatensuche werden deshalb bewusst nur x/y gesendet. Zudem
-  // dürfen sehr nahe Haltestellen (<20 m) nicht herausgefiltert werden.
+  // Primärquelle: transport.opendata.ch. Bei Koordinatensuche werden nur x/y
+  // gesendet. Nur echte Stationen mit verwertbaren Koordinaten werden akzeptiert.
   try {
     const params = new URLSearchParams({ x: String(geo.lat), y: String(geo.lon) });
-    const payload = await fetchJson(`${TRANSPORT_LOCATIONS}?${params}`, {}, 4200);
-    const stations = Array.isArray(payload.stations) ? payload.stations : [];
-    let nearest = Infinity;
-    for (const station of stations) {
-      const apiDistance = Number(station.distance);
-      if (Number.isFinite(apiDistance) && apiDistance >= 0) {
-        nearest = Math.min(nearest, apiDistance);
-        continue;
-      }
-      const lat = Number(station.coordinate?.x ?? station.coordinates?.x);
-      const lon = Number(station.coordinate?.y ?? station.coordinates?.y);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-      const distance = haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon });
-      nearest = Math.min(nearest, distance);
-    }
-    if (Number.isFinite(nearest)) return Math.round(nearest);
+    const payload = await fetchJson(`${TRANSPORT_LOCATIONS}?${params}`, {}, 2800);
+    const stations = Array.isArray(payload?.stations) ? payload.stations : [];
+
+    const candidates = stations
+      .map((station) => {
+        const type = String(station?.type || "station").toLowerCase();
+        const stationId = station?.id ?? station?.station?.id ?? null;
+        const lat = Number(station?.coordinate?.x ?? station?.coordinates?.x);
+        const lon = Number(station?.coordinate?.y ?? station?.coordinates?.y);
+        if (type !== "station" || !stationId || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+        return {
+          station,
+          stationId,
+          meters: haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon }),
+        };
+      })
+      .filter(Boolean)
+      .filter((entry) => Number.isFinite(entry.meters) && entry.meters >= 0)
+      .sort((a, b) => a.meters - b.meters);
+
+    // 0 m ist nur plausibel, wenn die echte Station koordinatengleich ist.
+    // Sonst bevorzugen wir den nächsten positiven Treffer.
+    const exact = candidates.find((entry) => entry.meters <= 2);
+    const positive = candidates.find((entry) => entry.meters > 2);
+    const hit = exact || positive;
+    if (hit && hit.meters <= 10000) return Math.round(hit.meters);
   } catch (_) {
-    // Fallback folgt unten. Die Standortanalyse soll bei einem temporären
-    // Ausfall der inoffiziellen Transport-API nicht ohne ÖV-Distanz bleiben.
+    // Direkter OSM-Fallback folgt.
   }
 
+  // Für ÖV kein Photon-Zwischenschritt: Overpass liefert die passenden
+  // Haltestellen-Tags direkt und verhindert zusätzliche sequenzielle Wartezeit.
   const transitQuery = (r) => `
     nwr(around:${r},{{LAT}},{{LON}})[public_transport=platform];
     nwr(around:${r},{{LAT}},{{LON}})[highway=bus_stop];
     nwr(around:${r},{{LAT}},{{LON}})[railway~"station|halt|tram_stop"];`;
-  const fallback = await nearestWithOsmFallback(geo, transitQuery, [
-    "public_transport:platform", "highway:bus_stop", "railway:station", "railway:halt", "railway:tram_stop"
-  ], [2, 5, 10]);
-  return fallback?.meters ?? null;
+
+  const started = Date.now();
+  for (const radiusKm of [2, 5, 10]) {
+    const remaining = 6500 - (Date.now() - started);
+    if (remaining <= 500) break;
+    try {
+      const meters = await overpassNearest(
+        geo,
+        withCoords(transitQuery, geo),
+        radiusKm * 1000,
+        Math.min(3600, remaining)
+      );
+      if (meters != null) return meters;
+    } catch (_) {
+      // Nächster Radius bzw. null.
+    }
+  }
+  return null;
 }
 
 async function overpassNearest(geo, queryBody, maxRadiusMeters, timeoutMs = 4200) {
   const query = `[out:json][timeout:4];(${queryBody(maxRadiusMeters)});out center tags qt 2500;`;
-  const requests = OVERPASS_ENDPOINTS.map((endpoint) => fetchJson(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-    body: new URLSearchParams({ data: query }).toString(),
-  }, timeoutMs));
-  const settled = await Promise.allSettled(requests);
-  let nearest = Infinity;
-  for (const entry of settled) {
-    if (entry.status !== "fulfilled") continue;
-    for (const element of entry.value.elements || []) {
+
+  const attempt = async (endpoint) => {
+    const payload = await fetchJson(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: new URLSearchParams({ data: query }).toString(),
+    }, timeoutMs);
+
+    let nearest = Infinity;
+    for (const element of payload?.elements || []) {
       const lat = Number(element.lat ?? element.center?.lat);
       const lon = Number(element.lon ?? element.center?.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
       const distance = haversine({ lat: geo.lat, lon: geo.lon }, { lat, lon });
       if (distance <= maxRadiusMeters) nearest = Math.min(nearest, distance);
     }
+    if (!Number.isFinite(nearest)) throw new Error("Kein passender OSM-Treffer auf diesem Endpoint.");
+    return Math.round(nearest);
+  };
+
+  try {
+    return await Promise.any(OVERPASS_ENDPOINTS.map((endpoint) => attempt(endpoint)));
+  } catch (_) {
+    return null;
   }
-  return Number.isFinite(nearest) ? Math.round(nearest) : null;
 }
 
 async function photonNearestByTags(geo, tags, radiusKm, timeoutMs = 5200) {
@@ -710,17 +764,55 @@ function plausiblePoiDistance(meters, minimumMeters = 25) {
 
 async function nearestWithOsmFallback(geo, overpassBuilder, photonTags, radiiKm, options = {}) {
   const minimumMeters = Number(options.minimumMeters || 0);
+  const totalBudgetMs = Number(options.totalBudgetMs || 7800);
+  const started = Date.now();
   let technicalFailures = 0;
   let successfulEmptyRequests = 0;
-  for (const radiusKm of radiiKm) {
-    const photon = await retryNullable(() => photonNearestByTags(geo, photonTags, radiusKm, 5200), 2, 160);
-    if (photon.value != null) return { meters: minimumMeters ? plausiblePoiDistance(photon.value, minimumMeters) : photon.value, source: `OpenStreetMap / Photon${minimumMeters && photon.value < minimumMeters ? " · Plausibilitätsfilter" : ""}` };
-    if (photon.hadSuccessfulRequest) successfulEmptyRequests += 1; else technicalFailures += 1;
 
-    const overpass = await retryNullable(() => overpassNearest(geo, withCoords(overpassBuilder, geo), radiusKm * 1000, 7200), 2, 220);
-    if (overpass.value != null) return { meters: minimumMeters ? plausiblePoiDistance(overpass.value, minimumMeters) : overpass.value, source: `OpenStreetMap / Overpass${minimumMeters && overpass.value < minimumMeters ? " · Plausibilitätsfilter" : ""}` };
-    if (overpass.hadSuccessfulRequest) successfulEmptyRequests += 1; else technicalFailures += 1;
+  for (const radiusKm of radiiKm) {
+    let remaining = totalBudgetMs - (Date.now() - started);
+    if (remaining <= 500) break;
+
+    try {
+      const photonValue = await photonNearestByTags(
+        geo,
+        photonTags,
+        radiusKm,
+        Math.min(2600, remaining)
+      );
+      if (photonValue != null) {
+        return {
+          meters: minimumMeters ? plausiblePoiDistance(photonValue, minimumMeters) : photonValue,
+          source: `OpenStreetMap / Photon${minimumMeters && photonValue < minimumMeters ? " · Plausibilitätsfilter" : ""}`,
+        };
+      }
+      successfulEmptyRequests += 1;
+    } catch (_) {
+      technicalFailures += 1;
+    }
+
+    remaining = totalBudgetMs - (Date.now() - started);
+    if (remaining <= 500) break;
+
+    try {
+      const overpassValue = await overpassNearest(
+        geo,
+        withCoords(overpassBuilder, geo),
+        radiusKm * 1000,
+        Math.min(3200, remaining)
+      );
+      if (overpassValue != null) {
+        return {
+          meters: minimumMeters ? plausiblePoiDistance(overpassValue, minimumMeters) : overpassValue,
+          source: `OpenStreetMap / Overpass${minimumMeters && overpassValue < minimumMeters ? " · Plausibilitätsfilter" : ""}`,
+        };
+      }
+      successfulEmptyRequests += 1;
+    } catch (_) {
+      technicalFailures += 1;
+    }
   }
+
   if (technicalFailures > 0 && successfulEmptyRequests === 0) {
     const err = new Error("Alle OSM-Zugriffswege waren technisch nicht verfügbar.");
     err.name = "OsmSourcesUnavailable";
@@ -1157,17 +1249,23 @@ export default async function handler(req, res) {
     const transitClass = parseTransitClass(layerMap[LAYERS.transitClass]);
 
     const [transitD, noiseD, vacancyD, officialSchoolD, shoppingD, osmSchoolD, motorwayD] = await Promise.all([
-      runDiagnostic("Nächster ÖV-Punkt", "OpenTransportData", () => fetchNearestTransit(geo)),
-      runDiagnostic("Lärm Strasse/Bahn Tag+Nacht", "BAFU / BAV via GeoAdmin", () => fetchNoiseBundle(geo)),
-      runDiagnostic("Leerwohnungsziffer", "BFS / opendata.swiss", () => fetchVacancyRate(municipalityBfs, municipalityName)),
-      runDiagnostic("Schule / Betreuung (offiziell)", "opendata.swiss", () => fetchOfficialEducationPoi(geo, municipalityName)),
-      runDiagnostic("Einkauf", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, retailQuery, [
+      runDiagnosticBounded("Nächster ÖV-Punkt", "OpenTransportData + OSM-Fallback", () => fetchNearestTransit(geo), 7500),
+      runDiagnosticBounded("Lärm Strasse/Bahn Tag+Nacht", "BAFU / BAV via GeoAdmin", () => fetchNoiseBundle(geo), 9000),
+      runDiagnosticBounded("Leerwohnungsziffer", "BFS / opendata.swiss", () => fetchVacancyRate(municipalityBfs, municipalityName), 7000),
+      runDiagnosticBounded("Schule / Betreuung (offiziell)", "opendata.swiss", () => fetchOfficialEducationPoi(geo, municipalityName), 6500),
+      runDiagnosticBounded("Einkauf", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, retailQuery, [
         "shop:supermarket", "shop:convenience", "shop:department_store", "shop:mall", "amenity:marketplace"
-      ], [3, 8, 20], { minimumMeters: 25 })),
-      runDiagnostic("Schule / Betreuung (OSM)", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, schoolQuery, [
+      ], [3, 8, 20], { minimumMeters: 25, totalBudgetMs: 7000 }), 7500),
+      runDiagnosticBounded("Schule / Betreuung (OSM)", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, schoolQuery, [
         "amenity:school", "amenity:kindergarten", "amenity:childcare", "amenity:college"
-      ], [3, 8, 20], { minimumMeters: 25 })),
-      runDiagnostic("Autobahnanschluss", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(geo, motorwayQuery, ["highway:motorway_junction"], [10, 25, 50])),
+      ], [3, 8, 20], { minimumMeters: 25, totalBudgetMs: 7000 }), 7500),
+      runDiagnosticBounded("Autobahnanschluss", "OpenStreetMap / Photon + Overpass", () => nearestWithOsmFallback(
+        geo,
+        motorwayQuery,
+        ["highway:motorway_junction"],
+        [10, 25, 50],
+        { totalBudgetMs: 7000 }
+      ), 7500),
     ]);
 
     const nearestPublicTransportMeters = transitD.value;

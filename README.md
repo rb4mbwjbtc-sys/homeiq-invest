@@ -34,3 +34,11 @@ Basis: stabile V5.5 ohne Bevölkerungsabfrage. Die funktionierende Standortdaten
 - Eigenkapitalrendite-Score neu kalibriert: 0%=0, 2%=20, 4%=40, 5%=50, 6%=60, 7%=70, 8%=80, 9%=90, ab 10%=100.
 - Zwischenwerte werden linear interpoliert.
 - Lagequalität, Objektqualität, Marktfähigkeit sowie die Hauptgewichtungen 35/20/25/12/8 bleiben unverändert.
+
+## V5.7.7
+- ÖV-Abfrage stabilisiert: echte Stationskoordinaten, eigene Haversine-Distanz und Schutz vor falschen 0-m-Werten.
+- transport.opendata.ch wird zuerst kurz abgefragt; danach direkter OSM/Overpass-Fallback mit 2/5/10 km.
+- Overpass verwendet den ersten gültigen Endpoint statt auf alle Server zu warten.
+- OSM-Fallbacks haben ein gemeinsames Zeitbudget und keine mehrfachen langen Retry-Kaskaden mehr.
+- Jede Standortquelle hat ein eigenes maximales Zeitbudget; Teilresultate bleiben verfügbar, wenn eine Quelle langsam ist.
+- Bestehende Score-, Rendite-, Lärm-, Leerstands-, Einkaufs-, Schul- und Autobahnlogik wurde inhaltlich nicht verändert.
