@@ -44,3 +44,11 @@ Basis: stabile V5.5 ohne Bevölkerungsabfrage. Die funktionierende Standortdaten
 - Upstream-Zeitfenster wurden moderat erhöht, damit Schule, Einkauf, Autobahn und ÖV wieder zuverlässiger gefunden werden.
 - Teilresultate bleiben erhalten, wenn einzelne Quellen nicht antworten.
 - Score-, Rendite-, Lage-, Objektqualitäts- und Marktfähigkeitslogik bleiben unverändert gegenüber V5.7.6.
+
+## V5.7.9
+- ÖV-Distanzberechnung vollständig auf die gleiche OSM-Logik wie Einkauf, Schule und Autobahn umgestellt.
+- ÖV nutzt OpenStreetMap / Photon mit Overpass-Fallback und 2/5/10-km-Radien.
+- Zulässige ÖV-Tags: highway=bus_stop, public_transport=platform, public_transport=station, railway=station/halt/tram_stop.
+- Distanzen werden aus Objekt- und POI-Koordinaten selbst berechnet.
+- transport.opendata.ch wird nicht mehr für die Distanzbewertung verwendet.
+- Alle übrigen Standort-, Score- und Renditelogiken bleiben gegenüber V5.7.8 unverändert.
