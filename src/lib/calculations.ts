@@ -4,21 +4,63 @@ import { analyseLocation, analyseMarket } from "./market";
 const clamp = (value: number, min = 0, max = 100) => Math.min(max, Math.max(min, value));
 
 function yieldScore(value: number) {
-  if (value >= 5) return 100;
-  if (value >= 4) return 80 + (value - 4) * 20;
-  if (value >= 3.5) return 60 + (value - 3.5) * 40;
-  if (value >= 3) return 40 + (value - 3) * 40;
-  if (value >= 2) return 20 + (value - 2) * 20;
-  return clamp(value * 10);
+  // V5.7.6: Marktbasierte Nettorendite-Skala. Zwischen den Fixpunkten
+  // wird linear interpoliert; ab 5.0 % ist der Score auf 100 gedeckelt.
+  const points: Array<[number, number]> = [
+    [1.0, 10],
+    [1.5, 20],
+    [2.0, 35],
+    [2.5, 50],
+    [3.0, 65],
+    [3.5, 80],
+    [4.0, 90],
+    [4.5, 97],
+    [5.0, 100],
+  ];
+
+  if (!Number.isFinite(value)) return 0;
+  if (value <= 0) return 0;
+  if (value < 1.0) return Math.round(value * 10);
+  if (value >= 5.0) return 100;
+
+  for (let i = 1; i < points.length; i += 1) {
+    const [x2, y2] = points[i];
+    const [x1, y1] = points[i - 1];
+    if (value <= x2) {
+      const t = (value - x1) / (x2 - x1);
+      return Math.round(y1 + t * (y2 - y1));
+    }
+  }
+  return 100;
 }
 
 function equityScore(value: number) {
+  // V5.7.6: Eigenkapitalrendite-Skala. Zwischen den Fixpunkten wird
+  // linear interpoliert; ab 10 % ist der Score auf 100 gedeckelt.
+  const points: Array<[number, number]> = [
+    [0, 0],
+    [2, 20],
+    [4, 40],
+    [5, 50],
+    [6, 60],
+    [7, 70],
+    [8, 80],
+    [9, 90],
+    [10, 100],
+  ];
+
+  if (!Number.isFinite(value) || value <= 0) return 0;
   if (value >= 10) return 100;
-  if (value >= 8) return 85 + (value - 8) * 7.5;
-  if (value >= 6) return 65 + (value - 6) * 10;
-  if (value >= 4) return 45 + (value - 4) * 10;
-  if (value >= 2) return 25 + (value - 2) * 10;
-  return clamp(value * 12.5);
+
+  for (let i = 1; i < points.length; i += 1) {
+    const [x2, y2] = points[i];
+    const [x1, y1] = points[i - 1];
+    if (value <= x2) {
+      const t = (value - x1) / (x2 - x1);
+      return Math.round(y1 + t * (y2 - y1));
+    }
+  }
+  return 100;
 }
 
 function objectQualityScore(input: AnalysisInput) {

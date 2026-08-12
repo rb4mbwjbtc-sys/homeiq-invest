@@ -28,3 +28,9 @@ Basis: stabile V5.5 ohne Bevölkerungsabfrage. Die funktionierende Standortdaten
 - Extreme Unter- und Überdimensionierung werden bei gleicher relativer Abweichung gleich behandelt.
 - Ab mehr als 40 % Abweichung wird die Marktfähigkeit als Plausibilitätsregel auf maximal 60/100 begrenzt.
 - Gewichtung bleibt unverändert: Zimmersegment 35 %, Flächenpassung 30 %, Objekttyp 20 %, Stockwerk/Zugänglichkeit 15 %.
+
+## V5.7.6
+- Nettorendite-Score neu kalibriert: 1.0%=10, 1.5%=20, 2.0%=35, 2.5%=50, 3.0%=65, 3.5%=80, 4.0%=90, 4.5%=97, ab 5.0%=100.
+- Eigenkapitalrendite-Score neu kalibriert: 0%=0, 2%=20, 4%=40, 5%=50, 6%=60, 7%=70, 8%=80, 9%=90, ab 10%=100.
+- Zwischenwerte werden linear interpoliert.
+- Lagequalität, Objektqualität, Marktfähigkeit sowie die Hauptgewichtungen 35/20/25/12/8 bleiben unverändert.
