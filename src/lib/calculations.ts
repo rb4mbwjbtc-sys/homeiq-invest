@@ -317,9 +317,18 @@ export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
 
   const rating = score >= 80 ? "Sehr gute Investitionsmöglichkeit" : score >= 65 ? "Gute Investitionsmöglichkeit" : score >= 50 ? "Investment genauer prüfen" : "Kritische Investitionsmöglichkeit";
   const marketPriceOkay = !marketAnalysis.marketValueAvailable || marketAnalysis.priceDifferencePercent > -8;
-  const recommendation = score >= 75 && netYield >= 3.4 && marketPriceOkay
+  // 5-stufige Kaufempfehlung. Eine direkte Kaufempfehlung setzt neben
+  // einem HomeIQ Score von mindestens 80 weiterhin mindestens 3.4 %
+  // Nettorendite sowie eine unauffällige Preisprüfung voraus.
+  const recommendation = score >= 80 && netYield >= 3.4 && marketPriceOkay
     ? "Kauf empfehlenswert"
-    : score >= 55 ? "Kauf interessant nach Preisverhandlung" : "Kauf aktuell nicht empfohlen";
+    : score >= 65
+      ? "Kauf interessant – Details prüfen"
+      : score >= 50
+        ? "Kauf neutral – Chancen und Risiken abwägen"
+        : score >= 35
+          ? "Kauf aktuell eher nicht empfohlen"
+          : "Kauf aktuell nicht empfohlen";
 
   const positives: string[] = [];
   const negatives: string[] = [];
