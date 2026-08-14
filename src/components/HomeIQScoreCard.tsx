@@ -9,11 +9,11 @@ type Props = {
 };
 
 const factors = [
-  { label: "Nettorendite", icon: CircleDollarSign },
-  { label: "Eigenkapital-\nrendite", icon: PieChart },
-  { label: "Lage", icon: MapPin },
-  { label: "Objektqualität", icon: Building2 },
-  { label: "Marktfähigkeit", icon: Sofa },
+  { label: "Nettorendite", parts: ["Nettorendite"], icon: CircleDollarSign },
+  { label: "Eigenkapitalrendite", parts: ["Eigenkapital-", "rendite"], icon: PieChart },
+  { label: "Lage", parts: ["Lage"], icon: MapPin },
+  { label: "Objektqualität", parts: ["Objekt", "qualität"], icon: Building2 },
+  { label: "Marktfähigkeit", parts: ["Markt", "fähigkeit"], icon: Sofa },
 ];
 
 export function HomeIQScoreCard({ score, rating, compact = false, print = false }: Props) {
@@ -57,12 +57,14 @@ export function HomeIQScoreCard({ score, rating, compact = false, print = false 
       </div>
 
       <div className="homeiq-score-factors">
-        {factors.map(({ label, icon: Icon }) => (
+        {factors.map(({ label, parts, icon: Icon }) => (
           <div key={label}>
             <Icon aria-hidden="true" />
-            <span>{label.split("\n").map((part, index) => (
-              <span key={`${part}-${index}`}>{part}{index === 0 && label.includes("\n") ? <br /> : null}</span>
-            ))}</span>
+            <span aria-label={label}>
+              {parts.map((part, index) => (
+                <span key={`${part}-${index}`}>{part}{index < parts.length - 1 ? <br /> : null}</span>
+              ))}
+            </span>
           </div>
         ))}
       </div>

@@ -767,3 +767,77 @@ img,svg,iframe{max-width:100%}
 .result-hero .homeiq-score-card.compact .homeiq-score-factors>div>span{font-size:10.5px;line-height:1.2;white-space:normal}
 @media(max-width:900px){.result-hero>.homeiq-score-card.compact{width:370px;min-width:370px}.result-hero .homeiq-score-card.compact .homeiq-score-factors>div>span{font-size:9.5px}}
 @media(max-width:700px){.result-hero>.homeiq-score-card.compact{width:100%;min-width:0}}
+
+
+/* V5.7.15 – Score-Faktoren: kollisionsfreie 5-Spalten-Darstellung */
+.homeiq-score-factors,
+.homeiq-score-card.compact .homeiq-score-factors{
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  column-gap:0;
+}
+.homeiq-score-factors>div,
+.homeiq-score-card.compact .homeiq-score-factors>div{
+  min-width:0;
+  width:100%;
+  box-sizing:border-box;
+  padding-left:5px;
+  padding-right:5px;
+  overflow:hidden;
+}
+.homeiq-score-factors>div>span,
+.homeiq-score-card.compact .homeiq-score-factors>div>span{
+  display:block;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  text-align:center;
+  white-space:normal;
+  overflow:hidden;
+  overflow-wrap:normal;
+  word-break:normal;
+  hyphens:none;
+}
+.homeiq-score-factors>div>span>span,
+.homeiq-score-card.compact .homeiq-score-factors>div>span>span{
+  display:inline;
+}
+.homeiq-score-card.compact .homeiq-score-factors>div>span{
+  font-size:clamp(7.5px,1.35vw,9px);
+  line-height:1.12;
+  letter-spacing:-.01em;
+}
+.homeiq-score-card.compact .homeiq-score-factors>div{
+  padding-left:3px;
+  padding-right:3px;
+}
+.homeiq-score-card.compact .homeiq-score-factors svg{
+  width:27px;
+  height:27px;
+}
+
+/* Auch auf kleinen Ansichten bleiben die fünf Faktoren in fünf sauberen Spalten. */
+@media(max-width:600px){
+  .homeiq-score-factors,
+  .homeiq-score-card.compact .homeiq-score-factors{
+    grid-template-columns:repeat(5,minmax(0,1fr));
+  }
+  .homeiq-score-factors>div,
+  .homeiq-score-card.compact .homeiq-score-factors>div{
+    min-height:0;
+    padding:6px 2px;
+    border-bottom:0;
+    border-right:1px solid rgba(204,239,225,.13);
+  }
+  .homeiq-score-factors>div:nth-child(odd){
+    border-right:1px solid rgba(204,239,225,.13);
+  }
+  .homeiq-score-factors>div:last-child{
+    grid-column:auto;
+    border-right:0;
+  }
+  .homeiq-score-factors>div>span,
+  .homeiq-score-card.compact .homeiq-score-factors>div>span{
+    font-size:clamp(7px,2.1vw,9px);
+    line-height:1.1;
+  }
+}

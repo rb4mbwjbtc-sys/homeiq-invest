@@ -10,7 +10,7 @@ export function Settings() {
         <div><span>Sprache</span><strong>Deutsch (Schweiz)</strong></div>
         <div><span>Währung</span><strong>CHF</strong></div>
         <div><span>Datenregion</span><strong>Schweiz</strong></div>
-        <div><span>Version</span><strong>Independent V5.7.14 · Stable Input & POI Plausibility</strong></div>
+        <div><span>Version</span><strong>Independent V5.7.15 · Stable Input & POI Plausibility</strong></div>
       </section>
     </div>
   );
