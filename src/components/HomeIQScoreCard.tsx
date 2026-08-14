@@ -9,11 +9,11 @@ type Props = {
 };
 
 const factors = [
-  { label: "Nettorendite", parts: ["Nettorendite"], icon: CircleDollarSign },
-  { label: "Eigenkapitalrendite", parts: ["Eigenkapital-", "rendite"], icon: PieChart },
-  { label: "Lage", parts: ["Lage"], icon: MapPin },
-  { label: "Objektqualität", parts: ["Objekt", "qualität"], icon: Building2 },
-  { label: "Marktfähigkeit", parts: ["Markt", "fähigkeit"], icon: Sofa },
+  { label: "Nettorendite", icon: CircleDollarSign },
+  { label: "Eigenkapitalrendite", icon: PieChart },
+  { label: "Lage", icon: MapPin },
+  { label: "Objektqualität", icon: Building2 },
+  { label: "Marktfähigkeit", icon: Sofa },
 ];
 
 export function HomeIQScoreCard({ score, rating, compact = false, print = false }: Props) {
@@ -57,14 +57,10 @@ export function HomeIQScoreCard({ score, rating, compact = false, print = false 
       </div>
 
       <div className="homeiq-score-factors">
-        {factors.map(({ label, parts, icon: Icon }) => (
+        {factors.map(({ label, icon: Icon }) => (
           <div key={label}>
             <Icon aria-hidden="true" />
-            <span aria-label={label}>
-              {parts.map((part, index) => (
-                <span key={`${part}-${index}`}>{part}{index < parts.length - 1 ? <br /> : null}</span>
-              ))}
-            </span>
+            <span>{label}</span>
           </div>
         ))}
       </div>

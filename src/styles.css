@@ -841,3 +841,77 @@ img,svg,iframe{max-width:100%}
     line-height:1.1;
   }
 }
+
+
+/* V5.7.16 – Score-Faktoren immer einzeilig, Schrift passt sich responsiv an */
+.homeiq-score-card{
+  container-type:inline-size;
+}
+
+.homeiq-score-factors,
+.homeiq-score-card.compact .homeiq-score-factors{
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  column-gap:0;
+}
+
+.homeiq-score-factors>div,
+.homeiq-score-card.compact .homeiq-score-factors>div{
+  min-width:0;
+  width:100%;
+  box-sizing:border-box;
+  padding-left:3px;
+  padding-right:3px;
+  overflow:hidden;
+}
+
+.homeiq-score-factors>div>span,
+.homeiq-score-card.compact .homeiq-score-factors>div>span{
+  display:block;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  white-space:nowrap !important;
+  overflow:hidden;
+  text-overflow:clip;
+  text-align:center;
+  line-height:1.05;
+  /* Passt sich direkt an die Breite des Score-Kastens an. */
+  font-size:clamp(5.5px,2.05cqw,11px);
+  letter-spacing:-0.025em;
+}
+
+.homeiq-score-card.compact .homeiq-score-factors>div>span{
+  font-size:clamp(5px,1.95cqw,9.5px);
+}
+
+.homeiq-score-factors svg,
+.homeiq-score-card.compact .homeiq-score-factors svg{
+  width:clamp(20px,6cqw,30px);
+  height:clamp(20px,6cqw,30px);
+}
+
+/* Fallback für Browser ohne Container Query Units */
+@supports not (font-size: 1cqw){
+  .homeiq-score-factors>div>span,
+  .homeiq-score-card.compact .homeiq-score-factors>div>span{
+    font-size:clamp(5.5px,0.72vw,10px);
+  }
+}
+
+@media(max-width:600px){
+  .homeiq-score-factors,
+  .homeiq-score-card.compact .homeiq-score-factors{
+    grid-template-columns:repeat(5,minmax(0,1fr));
+  }
+  .homeiq-score-factors>div,
+  .homeiq-score-card.compact .homeiq-score-factors>div{
+    padding:5px 1px;
+    border-bottom:0;
+  }
+  .homeiq-score-factors>div>span,
+  .homeiq-score-card.compact .homeiq-score-factors>div>span{
+    white-space:nowrap !important;
+    font-size:clamp(4.5px,1.85cqw,8px);
+    letter-spacing:-0.035em;
+  }
+}

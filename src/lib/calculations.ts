@@ -328,7 +328,7 @@ export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
         : score >= 35
           ? "Kauf aktuell eher nicht empfohlen"
           : "Kauf aktuell nicht empfohlen";
-  // V5.7.15: Score-Badge und Gesamtbewertung verwenden dieselbe
+  // V5.7.16: Score-Badge und Gesamtbewertung verwenden dieselbe
   // 5-stufige Kaufempfehlung wie der Hero-Badge.
   const rating = recommendation;
 
