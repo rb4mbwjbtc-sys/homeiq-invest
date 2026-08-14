@@ -20,7 +20,7 @@ export function Dashboard() {
           </div>
           <small className="free-note">{remainingFreeAnalyses} kostenlose {remainingFreeAnalyses === 1 ? "Analyse" : "Analysen"} übrig</small>
         </div>
-        <HomeIQScoreCard score={78} rating="Gute Investitionsmöglichkeit" compact />
+        <HomeIQScoreCard score={85} rating="Kauf empfehlenswert" compact />
       </section>
 
       <section className="panel dashboard-wide-panel score-model-panel">

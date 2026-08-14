@@ -760,3 +760,10 @@ img,svg,iframe{max-width:100%}
 .source-diagnostics span{font-size:10px;color:var(--muted)}
 .source-diagnostics .diag-loaded{color:#14765f}.source-diagnostics .diag-not_found{color:#8b6a28}.source-diagnostics .diag-timeout,.source-diagnostics .diag-error{color:#a6422f}
 @media(max-width:650px){.source-diagnostics{grid-template-columns:1fr}}
+
+/* V5.7.14 – bessere Lesbarkeit der fünf Score-Faktoren, sonst kein Layout-Eingriff */
+.result-hero>.homeiq-score-card.compact{width:410px;min-width:410px;padding-left:24px;padding-right:24px}
+.result-hero .homeiq-score-card.compact .homeiq-score-factors>div{padding-left:8px;padding-right:8px}
+.result-hero .homeiq-score-card.compact .homeiq-score-factors>div>span{font-size:10.5px;line-height:1.2;white-space:normal}
+@media(max-width:900px){.result-hero>.homeiq-score-card.compact{width:370px;min-width:370px}.result-hero .homeiq-score-card.compact .homeiq-score-factors>div>span{font-size:9.5px}}
+@media(max-width:700px){.result-hero>.homeiq-score-card.compact{width:100%;min-width:0}}

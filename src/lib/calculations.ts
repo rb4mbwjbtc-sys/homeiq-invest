@@ -315,7 +315,6 @@ export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
     scoreBreakdown.marketability * 0.08
   );
 
-  const rating = score >= 80 ? "Sehr gute Investitionsmöglichkeit" : score >= 65 ? "Gute Investitionsmöglichkeit" : score >= 50 ? "Investment genauer prüfen" : "Kritische Investitionsmöglichkeit";
   const marketPriceOkay = !marketAnalysis.marketValueAvailable || marketAnalysis.priceDifferencePercent > -8;
   // 5-stufige Kaufempfehlung. Eine direkte Kaufempfehlung setzt neben
   // einem HomeIQ Score von mindestens 80 weiterhin mindestens 3.4 %
@@ -329,6 +328,9 @@ export function calculateAnalysis(input: AnalysisInput): AnalysisResult {
         : score >= 35
           ? "Kauf aktuell eher nicht empfohlen"
           : "Kauf aktuell nicht empfohlen";
+  // V5.7.14: Score-Badge und Gesamtbewertung verwenden dieselbe
+  // 5-stufige Kaufempfehlung wie der Hero-Badge.
+  const rating = recommendation;
 
   const positives: string[] = [];
   const negatives: string[] = [];
