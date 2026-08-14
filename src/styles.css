@@ -915,3 +915,55 @@ img,svg,iframe{max-width:100%}
     letter-spacing:-0.035em;
   }
 }
+
+
+/* V5.7.17 – Analyseansicht: kompakter Score-Kasten ohne abgeschnittene Labels
+   Dashboard bleibt unverändert. */
+.homeiq-score-card.compact .homeiq-score-factors{
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  column-gap:0;
+  width:100%;
+}
+
+.homeiq-score-card.compact .homeiq-score-factors>div{
+  min-width:0;
+  width:100%;
+  overflow:visible;
+  padding-left:2px;
+  padding-right:2px;
+}
+
+.homeiq-score-card.compact .homeiq-score-factors>div>span{
+  display:block;
+  width:100%;
+  max-width:100%;
+  white-space:nowrap !important;
+  overflow:visible;
+  text-overflow:clip;
+  text-align:center;
+  line-height:1;
+  /* Nur in der Analyseansicht stärker verkleinern */
+  font-size:clamp(4.8px,1.55cqw,8.2px);
+  letter-spacing:-0.04em;
+  transform-origin:center top;
+}
+
+.homeiq-score-card.compact .homeiq-score-factors svg{
+  width:clamp(18px,5.2cqw,25px);
+  height:clamp(18px,5.2cqw,25px);
+}
+
+/* Zusätzliche Verkleinerung bei sehr schmalem Analyse-Score-Kasten */
+@container (max-width: 520px){
+  .homeiq-score-card.compact .homeiq-score-factors>div>span{
+    font-size:clamp(4.4px,1.45cqw,7.4px);
+    letter-spacing:-0.05em;
+  }
+}
+
+@container (max-width: 430px){
+  .homeiq-score-card.compact .homeiq-score-factors>div>span{
+    font-size:clamp(4px,1.3cqw,6.8px);
+    letter-spacing:-0.055em;
+  }
+}
