@@ -27,6 +27,44 @@ const distanceMetersScore = (meters: number | null | undefined, type: "transit" 
   return Math.round(clamp(piecewiseScore(meters, curves[type])));
 };
 
+const transitClassScore = (transitClass: string | null | undefined) => {
+  const normalized = String(transitClass || "").trim().toUpperCase();
+  return ({ A: 100, B: 85, C: 65, D: 45 } as Record<string, number>)[normalized] ?? 25;
+};
+
+const transitDistanceScore = (meters: number | null | undefined) => {
+  if (meters == null) return null;
+  return Math.round(clamp(piecewiseScore(meters, [
+    [250, 100],
+    [500, 85],
+    [750, 70],
+    [1000, 55],
+    [1500, 35],
+    [2000, 15],
+  ])));
+};
+
+const combinedTransitScore = (
+  transitClass: string | null | undefined,
+  meters: number | null | undefined,
+  fallbackMinutes: number,
+) => {
+  const classScore = transitClassScore(transitClass);
+  const distanceScore = transitDistanceScore(meters);
+
+  // Vereinbarte HomeIQ-Logik:
+  // 60 % amtliche ÖV-Güteklasse + 40 % Distanz zum nächsten ÖV-Punkt.
+  if (distanceScore != null) {
+    return Math.round(clamp(classScore * 0.60 + distanceScore * 0.40));
+  }
+
+  // Falls ausnahmsweise keine Distanz verfügbar ist, bleibt eine vorhandene
+  // Güteklasse verwertbar. Ohne Open-Data-Distanz und ohne Güteklasse bleibt
+  // der bisherige Minuten-Fallback bestehen.
+  if (transitClass) return classScore;
+  return Math.round(clamp(fallbackMinutes > 0 ? 100 - fallbackMinutes * 4 : 50));
+};
+
 function noiseBaseScore(db: number): number {
   return Math.round(clamp(piecewiseScore(db, [[40,100],[45,100],[50,90],[55,75],[60,55],[65,30],[70,10]])));
 }
@@ -76,7 +114,7 @@ export function analyseLocation(input: AnalysisInput): LocationAnalysis {
     {
       label: "ÖV-Anbindung",
       available: evidence ? evidence.nearestPublicTransportMeters !== null || !!evidence.transitClass : true,
-      score: evidence?.nearestPublicTransportMeters != null ? distanceMetersScore(evidence.nearestPublicTransportMeters, "transit") : Math.round(clamp(l.publicTransportMinutes > 0 ? 100 - l.publicTransportMinutes * 4 : 50)),
+      score: combinedTransitScore(evidence?.transitClass, evidence?.nearestPublicTransportMeters, l.publicTransportMinutes),
       detail: distanceLabel(evidence?.nearestPublicTransportMeters, l.publicTransportMinutes),
     },
     {
