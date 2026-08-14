@@ -967,3 +967,43 @@ img,svg,iframe{max-width:100%}
     letter-spacing:-0.055em;
   }
 }
+
+
+/* V5.7.18 – klare Trennung Dashboard vs. Analyse
+   Dashboard: Labels sichtbar und minimal grösser.
+   Analyse (.compact): nur Icons, keine Faktor-Texte. */
+
+/* Dashboard / grosse Score-Karte */
+.homeiq-score-card:not(.compact) .homeiq-score-factors>div>span{
+  display:block;
+  white-space:nowrap !important;
+  overflow:visible;
+  text-overflow:clip;
+  text-align:center;
+  font-size:clamp(8px,1.0vw,11px);
+  line-height:1.05;
+  letter-spacing:-0.015em;
+}
+
+/* Analyse / kompakte Score-Karte: nur Icons */
+.homeiq-score-card.compact .homeiq-score-factors>div>span{
+  display:none !important;
+}
+
+.homeiq-score-card.compact .homeiq-score-factors>div{
+  min-width:0;
+  width:100%;
+  padding:7px 2px 5px;
+  overflow:visible;
+}
+
+.homeiq-score-card.compact .homeiq-score-factors svg{
+  width:clamp(22px,5.5cqw,28px);
+  height:clamp(22px,5.5cqw,28px);
+  margin-bottom:0;
+}
+
+/* In der kompakten Karte bleibt die 5-Spalten-Struktur unverändert */
+.homeiq-score-card.compact .homeiq-score-factors{
+  grid-template-columns:repeat(5,minmax(0,1fr));
+}
