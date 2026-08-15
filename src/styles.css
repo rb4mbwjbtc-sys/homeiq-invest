@@ -1054,21 +1054,21 @@ img,svg,iframe{max-width:100%}
 }
 
 
-/* V5.7.21 – mobile Titel kompakter, Desktop unverändert */
+/* V5.7.22 – mobile Titel kompakter; Desktop unverändert */
 @media(max-width:700px){
   .screen-report .result-hero h1{
-    font-size:clamp(25px,7vw,32px)!important;
+    font-size:clamp(24px,6.6vw,30px)!important;
     line-height:1.04!important;
     letter-spacing:-.035em!important;
   }
   .analysis-card .analysis-main-link h2{
-    font-size:19px!important;
+    font-size:18px!important;
     line-height:1.12!important;
     letter-spacing:-.02em!important;
   }
 }
 
-/* PDF Score: dieselben fünf Faktoren wie Analyse/Dashboard */
+/* V5.7.22 – PDF HomeIQ Score: fünf Symbole wie in App/Dashboard */
 .print-score-factors-fixed{
   width:100%;
   display:grid;
@@ -1091,29 +1091,43 @@ img,svg,iframe{max-width:100%}
   stroke-width:1.6;
 }
 
-/* PDF: Lagewerte im gleichen Informationsmodell wie die Analyseseite */
-.print-location-details{
+/* PDF Lagefaktoren – gleiche Datenbasis wie Analyseseite */
+.print-location-factors{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:4px;
+  margin-top:5px;
+}
+.print-location-factor{
+  min-width:0;
+  padding:4px 5px;
+  border:1px solid #dce7e3;
+  border-radius:6px;
+  background:#f8fbfa;
+}
+.print-location-factor-head{
+  display:flex;
+  justify-content:space-between;
+  gap:5px;
+  align-items:center;
+}
+.print-location-factor span{font-size:7px;color:#46655b;line-height:1.05}
+.print-location-factor strong{font-size:8px;white-space:nowrap}
+.print-location-factor small{display:block;margin-top:2px;font-size:6px;color:#71857e;line-height:1.08}
+
+/* PDF Open Data – dieselben Kerndaten wie auf der Analyseseite */
+.print-open-data-grid{
   display:grid;
   grid-template-columns:repeat(4,minmax(0,1fr));
   gap:4px;
   margin-top:5px;
 }
-.print-location-details>div{
+.print-open-data-grid>div{
   padding:4px 5px;
   border:1px solid #dce7e3;
   border-radius:6px;
   background:#f8fbfa;
   min-width:0;
 }
-.print-location-details span{
-  display:block;
-  font-size:6.5px;
-  color:#637a73;
-  line-height:1.05;
-}
-.print-location-details strong{
-  display:block;
-  margin-top:2px;
-  font-size:8px;
-  line-height:1.05;
-}
+.print-open-data-grid span{display:block;font-size:6px;color:#637a73;line-height:1.05}
+.print-open-data-grid strong{display:block;margin-top:2px;font-size:7.5px;line-height:1.05}

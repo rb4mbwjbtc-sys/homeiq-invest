@@ -114,27 +114,6 @@ async function runDiagnostic(name, source, fn) {
 async function lookupCityByPostalCode(postalCode) {
   const value = String(postalCode || "").trim();
   if (!/^\d{4}$/.test(value)) return null;
-
-  const extractCity = (item) => {
-    const attrs = item?.attrs || {};
-    const values = [attrs.label, attrs.detail].map(cleanLabel).filter(Boolean);
-    for (const raw of values) {
-      // Übliche GeoAdmin-Formen abdecken:
-      // "4303 Kaiseraugst", "Kaiseraugst 4303", "4303 Kaiseraugst (AG)".
-      const after = raw.match(new RegExp(`(?:^|\\s)${value}\\s+([^|–\\-(]+)`));
-      if (after?.[1]) {
-        const city = after[1].replace(/\s*\([^)]*\)\s*$/, "").trim();
-        if (city && !/^ch\b/i.test(city)) return city;
-      }
-      const before = raw.match(new RegExp(`^(.+?)\\s+${value}(?:\\s|$)`));
-      if (before?.[1]) {
-        const city = before[1].replace(/^.*?>/, "").replace(/\s*\([^)]*\)\s*$/, "").trim();
-        if (city && !/^ch\b/i.test(city)) return city;
-      }
-    }
-    return null;
-  };
-
   const params = new URLSearchParams({
     searchText: value,
     type: "locations",
@@ -142,38 +121,27 @@ async function lookupCityByPostalCode(postalCode) {
     sr: "2056",
     limit: "20",
   });
-
-  // Primär: amtliches PLZ-Verzeichnis.
-  try {
-    const payload = await fetchJson(`${GEOADMIN_LOCATION_SEARCH}?${params}`, {}, 5200);
-    const candidates = payload.results || [];
-    const exact = candidates.find((item) => {
-      const label = cleanLabel(item.attrs?.label || "");
-      const detail = cleanLabel(item.attrs?.detail || "");
-      return label.includes(value) || detail.includes(value);
-    }) || candidates[0];
-    const city = exact ? extractCity(exact) : null;
-    if (city) return city;
-  } catch (_) {
-    // Fallback unten.
-  }
-
-  // Fallback: normale GeoAdmin-Ortssuche ohne Origin-Filter.
-  const fallbackParams = new URLSearchParams({
-    searchText: value,
-    type: "locations",
-    sr: "2056",
-    limit: "30",
-  });
-  const fallback = await fetchJson(`${GEOADMIN_SEARCH}?${fallbackParams}`, {}, 5200);
-  for (const item of fallback.results || []) {
+  const payload = await fetchJson(`${GEOADMIN_LOCATION_SEARCH}?${params}`, {}, 4200);
+  const candidates = payload.results || [];
+  const exact = candidates.find((item) => {
     const label = cleanLabel(item.attrs?.label || "");
     const detail = cleanLabel(item.attrs?.detail || "");
-    if (!label.includes(value) && !detail.includes(value)) continue;
-    const city = extractCity(item);
-    if (city) return city;
+    const exactPostalCode = new RegExp(`(^|\\s)${value}(\\s|$)`);
+    return exactPostalCode.test(label) || exactPostalCode.test(detail);
+  });
+  // Nie irgendeinen ersten Suchtreffer übernehmen:
+  // Wenn die PLZ nicht exakt im Resultat vorkommt, bleibt Ort leer.
+  if (!exact) return null;
+  const label = cleanLabel(exact.attrs?.label || "");
+  // GeoAdmin ZIP-origin labels normally contain “PLZ Ort”. Remove the PLZ
+  // and optional canton/markup suffixes, while preserving multi-word place names.
+  let city = label.replace(new RegExp(`^.*?${value}\\s*`), "").trim();
+  city = city.replace(/\s*[-–|].*$/, "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+  if (!city) {
+    const detail = cleanLabel(exact.attrs?.detail || "");
+    city = detail.replace(new RegExp(`^.*?${value}\\s*`), "").trim();
   }
-  return null;
+  return city || null;
 }
 
 async function geocodeAddress(street, postalCode, city) {

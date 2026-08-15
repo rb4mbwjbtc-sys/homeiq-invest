@@ -1,7 +1,7 @@
 {
   "name": "homeiq-independent",
   "private": true,
-  "version": "5.7.21",
+  "version": "5.7.22",
   "type": "module",
   "scripts": {
     "dev": "vite",

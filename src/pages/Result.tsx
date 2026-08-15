@@ -132,7 +132,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.21</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.22</span>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -321,7 +321,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.21</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.22</span></div>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
@@ -418,16 +418,32 @@ export function Result() {
           <div className="print-location-column">
             <h2>LAGE</h2>
             <div className="print-location-score">{location.score}/100 · {location.rating}<small>Datenabdeckung {location.dataCoverage}%</small></div>
-            <div className="print-location-details">
-              <div><span>ÖV-Anbindung</span><strong>{location.subscores.transit}/100</strong></div>
-              <div><span>Einkauf</span><strong>{location.subscores.shopping}/100</strong></div>
-              <div><span>Schule / Betreuung</span><strong>{location.subscores.school}/100</strong></div>
-              <div><span>Verkehr</span><strong>{location.subscores.motorway}/100</strong></div>
-              <div><span>Lärm</span><strong>{location.subscores.noise}/100</strong></div>
-              <div><span>Leerstand</span><strong>{location.subscores.vacancy}/100</strong></div>
-              <div><span>Nachfrage</span><strong>{location.subscores.demand}/100</strong></div>
-              <div><span>Mikrolage</span><strong>{location.subscores.microLocation}/100</strong></div>
+
+            <div className="print-location-factors">
+              {location.factors.map((factor) => (
+                <div className="print-location-factor" key={factor.label}>
+                  <div className="print-location-factor-head">
+                    <span>{factor.label}</span>
+                    <strong>{factor.score}/100</strong>
+                  </div>
+                  <small>{factor.detail}</small>
+                </div>
+              ))}
             </div>
+
+            {input.openDataLocation && (
+              <div className="print-open-data-grid">
+                <div><span>ÖV-Güteklasse</span><strong>{input.openDataLocation.evidence.transitClass || "—"}</strong></div>
+                <div><span>Nächster ÖV-Punkt</span><strong>{input.openDataLocation.evidence.nearestPublicTransportMeters !== null ? `${input.openDataLocation.evidence.nearestPublicTransportMeters} m` : "—"}</strong></div>
+                <div><span>Einkauf</span><strong>{input.openDataLocation.evidence.nearestShoppingMeters !== null ? `${input.openDataLocation.evidence.nearestShoppingMeters} m` : "—"}</strong></div>
+                <div><span>Schule / Betreuung</span><strong>{input.openDataLocation.evidence.nearestSchoolMeters !== null ? `${input.openDataLocation.evidence.nearestSchoolMeters} m` : "—"}</strong></div>
+                <div><span>Leerwohnungsziffer</span><strong>{input.openDataLocation.evidence.vacancyRate !== null ? `${input.openDataLocation.evidence.vacancyRate.toFixed(2)} %` : "—"}</strong></div>
+                <div><span>Baujahr</span><strong>{input.yearBuilt || input.openDataLocation.building?.constructionYear || "—"}</strong></div>
+                <div><span>EGID</span><strong>{input.openDataLocation.building?.egid || "—"}</strong></div>
+                <div><span>Datenqualität</span><strong>{input.openDataLocation.quality}</strong></div>
+              </div>
+            )}
+
             <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} coordinates={input.openDataLocation?.address ?? null} print />
           </div>
         </section>
