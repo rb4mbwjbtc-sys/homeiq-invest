@@ -1037,3 +1037,18 @@ img,svg,iframe{max-width:100%}
   .number-stepper{grid-template-columns:48px minmax(0,1fr) 48px}
   .number-stepper button{min-height:48px}
 }
+
+
+/* V5.7.20 – gespeicherte Analysen: Löschen auf Mobilgeräten besser bedienbar */
+@media(max-width:700px){
+  .analysis-card-actions .icon-button.danger{
+    width:48px;
+    height:48px;
+    min-width:48px;
+    min-height:48px;
+  }
+  .analysis-card-actions .icon-button.danger svg{
+    width:23px;
+    height:23px;
+  }
+}

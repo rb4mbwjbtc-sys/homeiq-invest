@@ -51,7 +51,8 @@ type NumberStepperProps = {
 function NumberStepper({ value, step = 1, min = 0, onChange, ariaLabel }: NumberStepperProps) {
   const normalize = (next: number) => {
     const safe = Math.max(min, next);
-    return Number(safe.toFixed(step < 1 ? 1 : 0));
+    const decimals = String(step).includes(".") ? String(step).split(".")[1].length : 0;
+    return Number(safe.toFixed(decimals));
   };
 
   return (
@@ -360,7 +361,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.7.19</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.7.20</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -715,7 +716,18 @@ export function NewAnalysis() {
                   if (rail) parts.push(`Bahn ${rail} dB${e.railNoiseDistanceMeters != null ? ` · ${Math.round(e.railNoiseDistanceMeters)} m` : ""}${e.railNoiseImpactPercent != null ? ` · Einfluss ${e.railNoiseImpactPercent}%` : ""}`);
                   return parts.join(" · ");
                 })()}</small></div>
-                <div><span>Gebäude</span><strong>{form.openDataLocation.building?.constructionYear ? `Baujahr ${form.openDataLocation.building.constructionYear}` : form.openDataLocation.building?.egid ? `EGID ${form.openDataLocation.building.egid}` : "nicht verfügbar"}</strong></div>
+                <div>
+                  <span>Gebäude</span>
+                  <strong>
+                    {form.yearBuilt
+                      ? `Baujahr ${form.yearBuilt}`
+                      : form.openDataLocation.building?.constructionYear
+                        ? `Baujahr ${form.openDataLocation.building.constructionYear}`
+                        : form.openDataLocation.building?.egid
+                          ? `EGID ${form.openDataLocation.building.egid}`
+                          : "nicht verfügbar"}
+                  </strong>
+                </div>
               </div>
 
 
@@ -895,20 +907,22 @@ export function NewAnalysis() {
             </label>
             <label>
               Hypothekarzins (%)
-              <input
-                type="number"
-                step="0.1"
+              <NumberStepper
                 value={form.interestRate}
-                onChange={(event) => set("interestRate", Number(event.target.value))}
+                step={0.05}
+                min={0}
+                onChange={(value) => set("interestRate", value)}
+                ariaLabel="Hypothekarzins"
               />
             </label>
             <label>
               Amortisation (%)
-              <input
-                type="number"
-                step="0.1"
+              <NumberStepper
                 value={form.amortizationRate}
-                onChange={(event) => set("amortizationRate", Number(event.target.value))}
+                step={0.05}
+                min={0}
+                onChange={(value) => set("amortizationRate", value)}
+                ariaLabel="Amortisation"
               />
             </label>
 

@@ -132,7 +132,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.19</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.20</span>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -263,6 +263,7 @@ export function Result() {
                 <div><span>Nächster ÖV-Punkt</span><strong>{input.openDataLocation.evidence.nearestPublicTransportMeters !== null ? `${input.openDataLocation.evidence.nearestPublicTransportMeters} m` : "—"}</strong></div>
                 <div><span>Einkauf</span><strong>{input.openDataLocation.evidence.nearestShoppingMeters !== null ? `${input.openDataLocation.evidence.nearestShoppingMeters} m` : "—"}</strong></div>
                 <div><span>Schule / Betreuung</span><strong>{input.openDataLocation.evidence.nearestSchoolMeters !== null ? `${input.openDataLocation.evidence.nearestSchoolMeters} m` : "—"}</strong></div>
+                <div><span>Baujahr</span><strong>{input.yearBuilt || input.openDataLocation.building?.constructionYear || "—"}</strong></div>
                 <div><span>EGID</span><strong>{input.openDataLocation.building?.egid || "—"}</strong></div>
               </div>
               <details><summary>Verwendete Quellen</summary>{input.openDataLocation.sources.map((source) => <p key={source.name}><strong>{source.name}:</strong> {source.detail}</p>)}</details>
@@ -320,7 +321,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.19</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.20</span></div>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
