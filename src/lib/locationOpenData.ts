@@ -66,14 +66,65 @@ async function loadMarketOptional(url: string): Promise<OpenDataMarketReport> {
 export async function lookupSwissCityByPostalCode(postalCode: string): Promise<string | null> {
   const value = postalCode.trim();
   if (!/^\d{4}$/.test(value)) return null;
+
+  // Primär über die HomeIQ-API. Damit bleibt die bestehende Architektur erhalten.
   try {
     const payload = await fetchJsonWithTimeout<{ city?: string | null }>(
       `/api/location?lookupPostalCode=${encodeURIComponent(value)}`,
       7000,
     );
-    return payload.city?.trim() || null;
+    const city = payload.city?.trim();
+    if (city) return city;
   } catch {
-    // Die automatische Ortsauflösung ist Komfortfunktion und darf die Eingabe nie blockieren.
+    // Fallback unten – die Komfortfunktion darf die Eingabe nicht blockieren.
+  }
+
+  // Robuster Fallback direkt auf den offiziellen GeoAdmin SearchServer.
+  // Der Origin "zipcode" liefert Schweizer PLZ-Orte; es wird nur ein exakter
+  // PLZ-Treffer akzeptiert.
+  try {
+    const params = new URLSearchParams({
+      searchText: value,
+      type: "locations",
+      origins: "zipcode",
+      sr: "2056",
+      limit: "20",
+    });
+    const response = await fetch(
+      `https://api3.geo.admin.ch/rest/services/ech/SearchServer?${params.toString()}`,
+      { headers: { Accept: "application/json" } },
+    );
+    if (!response.ok) return null;
+
+    const payload = await response.json() as {
+      results?: Array<{ attrs?: { num?: string | number; label?: string; detail?: string } }>;
+    };
+    const clean = (raw = "") =>
+      String(raw).replace(/<[^>]+>/g, "").replace(/#/g, "").replace(/\s+/g, " ").trim();
+
+    const exact = (payload.results || []).find((item) => {
+      const attrs = item.attrs || {};
+      const label = clean(attrs.label || "");
+      const detail = clean(attrs.detail || "");
+      const postalPattern = new RegExp(`(^|\\s)${value}(\\s|$)`);
+      return String(attrs.num ?? "") === value || postalPattern.test(label) || postalPattern.test(detail);
+    });
+    if (!exact) return null;
+
+    const extractCity = (raw?: string) => {
+      let city = clean(raw || "");
+      if (!city) return "";
+      city = city
+        .replace(new RegExp(`(^|\\s)${value}(?=\\s|$)`, "g"), " ")
+        .replace(/\\s*\\([^)]*\\)\\s*/g, " ")
+        .replace(/\\s*[-–|]\\s*.*$/, "")
+        .replace(/\\s+/g, " ")
+        .trim();
+      return city.replace(/\\s+CH(?:\\s+.*)?$/i, "").trim();
+    };
+
+    return extractCity(exact.attrs?.label) || extractCity(exact.attrs?.detail) || null;
+  } catch {
     return null;
   }
 }

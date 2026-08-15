@@ -132,7 +132,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.23</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.24</span>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -321,7 +321,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.23</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.24</span></div>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
@@ -358,7 +358,7 @@ export function Result() {
           </div>
         </section>
 
-        <section className="print-section">
+        <section className="print-section print-score-section-card">
           <h2>HOMEIQ SCORE — AUFSCHLÜSSELUNG</h2>
           <div className="print-score-breakdown">
             {Object.entries(result.scoreBreakdown).map(([key, value]) => (
@@ -384,21 +384,22 @@ export function Result() {
         <section className="print-section print-bottom-grid">
           <div>
             <h2>KURZFAZIT</h2>
-            <p>
-              {result.rating}. Nettorendite {percent(result.netYield)}, monatlicher Cashflow{" "}
-              {money(result.monthlyCashflow)} und Eigenkapitalrendite{" "}
-              {percent(result.equityReturn)}.
-            </p>
-            <strong>{result.recommendation}</strong>
-            <div className="print-pros-cons">
-              <div>
-                <span>POSITIV</span>
-                {result.positives.slice(0, 3).map((item) => (
-                  <p key={item}>· {item}</p>
-                ))}
+            <div className="print-summary-grid">
+              <div className="print-summary-main">
+                <span>GESAMTBEURTEILUNG</span>
+                <strong>{result.rating}</strong>
+                <p>
+                  Nettorendite {percent(result.netYield)} · Cashflow / Monat {money(result.monthlyCashflow)} ·
+                  Eigenkapitalrendite {percent(result.equityReturn)}
+                </p>
+                <b>{result.recommendation}</b>
               </div>
-              <div>
-                <span>NEGATIV</span>
+              <div className="print-summary-side">
+                <span>POSITIV</span>
+                {result.positives.slice(0, 3).map((item) => <p key={item}>· {item}</p>)}
+              </div>
+              <div className="print-summary-side">
+                <span>RISIKEN</span>
                 {(result.negatives.length ? result.negatives : ["—"])
                   .slice(0, 3)
                   .map((item) => <p key={item}>· {item}</p>)}

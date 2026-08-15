@@ -199,6 +199,18 @@ export function NewAnalysis() {
     };
   }, [form.postalCode]);
 
+  const resolveCityFromPostalCode = async () => {
+    const postalCode = form.postalCode.trim();
+    if (!/^\d{4}$/.test(postalCode)) return;
+    const city = await lookupSwissCityByPostalCode(postalCode);
+    if (!city) return;
+    setForm((previous) => {
+      if (previous.postalCode.trim() !== postalCode || previous.city.trim() === city) return previous;
+      return { ...previous, city, openDataLocation: null };
+    });
+    setLocationLoaded(false);
+  };
+
   const calculationInput = useMemo(() => {
     if (form.propertyType !== "mfh") return form;
     return {
@@ -361,7 +373,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.7.23</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.7.24</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -418,10 +430,13 @@ export function NewAnalysis() {
               <input
                 value={form.postalCode}
                 onChange={(event) => {
-                  set("postalCode", event.target.value);
+                  set("postalCode", event.target.value.replace(/\D/g, "").slice(0, 4));
                   setLocationLoaded(false);
                   set("openDataLocation", null);
                 }}
+                onBlur={() => { void resolveCityFromPostalCode(); }}
+                inputMode="numeric"
+                autoComplete="postal-code"
               />
             </label>
             <label>
