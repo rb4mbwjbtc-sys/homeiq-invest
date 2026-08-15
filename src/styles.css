@@ -1293,3 +1293,70 @@ img,svg,iframe{max-width:100%}
   line-height:1.18!important;
   color:#526d64;
 }
+
+
+/* V5.7.25 – Scorewerte in HomeIQ-Aufschlüsselung und Lageanalyse identisch */
+.score-list>div>strong,
+.location-factor>div:first-child>strong{
+  font-size:13px;
+  line-height:1;
+  min-width:62px;
+  text-align:right;
+  white-space:nowrap;
+  flex:0 0 62px;
+  justify-self:end;
+}
+.location-factor>div:first-child>span{
+  min-width:0;
+}
+@media(max-width:700px){
+  .score-list>div>strong,
+  .location-factor>div:first-child>strong{
+    font-size:12px!important;
+    min-width:58px!important;
+    flex-basis:58px!important;
+  }
+}
+
+/* V5.7.25 – PDF Lagewerte: feste Wertespalte wie bei HomeIQ Score-Aufschlüsselung */
+.print-location-factor-head{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) 44px!important;
+  gap:4px!important;
+  align-items:center!important;
+}
+.print-location-factor-head span{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.print-location-factor-head strong{
+  width:44px!important;
+  min-width:44px!important;
+  max-width:44px!important;
+  justify-self:end!important;
+  text-align:right!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+  font-size:9px!important;
+  line-height:1!important;
+}
+.print-report.pdf-capture .print-location-factor-head{
+  grid-template-columns:minmax(0,1fr) 44px!important;
+}
+.print-report.pdf-capture .print-location-factor-head strong{
+  width:44px!important;
+  min-width:44px!important;
+  max-width:44px!important;
+  font-size:9px!important;
+  text-align:right!important;
+}
+
+/* PDF Gesamtbeurteilung: gleicher Text wie Analyse, im bestehenden Kartenstil */
+.print-summary-main p b{
+  display:inline;
+  margin:0;
+  font-size:inherit;
+  color:inherit;
+}

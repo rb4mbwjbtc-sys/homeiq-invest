@@ -132,7 +132,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.24</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.25</span>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -321,7 +321,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.24</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.25</span></div>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
@@ -388,11 +388,20 @@ export function Result() {
               <div className="print-summary-main">
                 <span>GESAMTBEURTEILUNG</span>
                 <strong>{result.rating}</strong>
+                {location.dataCoverage < 50 && (
+                  <p>
+                    <b>Lage-Datenabdeckung nur {location.dataCoverage}%.</b> Die Lagebeurteilung ist deshalb nur eingeschränkt belastbar.
+                  </p>
+                )}
                 <p>
-                  Nettorendite {percent(result.netYield)} · Cashflow / Monat {money(result.monthlyCashflow)} ·
-                  Eigenkapitalrendite {percent(result.equityReturn)}
+                  Die Analyse kombiniert Rendite, Finanzierung und Lagequalität.{" "}
+                  {market.marketValueAvailable
+                    ? <>Der belastbar geschätzte Marktwert liegt bei <b>{money(market.estimatedMarketValue)}</b>. </>
+                    : <>Für den Marktwert liegen aktuell keine ausreichend belastbaren Vergleichsdaten vor. </>}
+                  {market.marketRentAvailable
+                    ? <>Die aktuelle Miete weicht um <b>{percent(market.rentDifferencePercent)}</b> vom geschätzten Marktniveau ab.</>
+                    : <>Eine Marktmietschätzung wird ohne belastbaren Benchmark bewusst nicht ausgegeben.</>}
                 </p>
-                <b>{result.recommendation}</b>
               </div>
               <div className="print-summary-side">
                 <span>POSITIV</span>
