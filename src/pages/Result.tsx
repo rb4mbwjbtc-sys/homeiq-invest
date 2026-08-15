@@ -132,7 +132,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.20</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.21</span>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -321,7 +321,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.20</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.21</span></div>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
@@ -407,7 +407,7 @@ export function Result() {
           </div>
           <div>
             <h2>OBJEKTDATEN</h2>
-            <p>Objekttyp {input.propertyType}</p>
+            <p>Objekttyp {propertyTypeLabels[input.propertyType] || input.propertyType}</p>
             <p>Baujahr {input.yearBuilt || input.openDataLocation?.building?.constructionYear || "—"}{!input.yearBuilt && input.openDataLocation?.building?.constructionYear ? " (Open Data)" : ""}</p>
             <p>Letzte Renovation {input.renovatedYear || "—"}</p>
             <p>Wohnfläche {number(input.livingArea)} m²</p>
@@ -418,8 +418,17 @@ export function Result() {
           <div className="print-location-column">
             <h2>LAGE</h2>
             <div className="print-location-score">{location.score}/100 · {location.rating}<small>Datenabdeckung {location.dataCoverage}%</small></div>
+            <div className="print-location-details">
+              <div><span>ÖV-Anbindung</span><strong>{location.subscores.transit}/100</strong></div>
+              <div><span>Einkauf</span><strong>{location.subscores.shopping}/100</strong></div>
+              <div><span>Schule / Betreuung</span><strong>{location.subscores.school}/100</strong></div>
+              <div><span>Verkehr</span><strong>{location.subscores.motorway}/100</strong></div>
+              <div><span>Lärm</span><strong>{location.subscores.noise}/100</strong></div>
+              <div><span>Leerstand</span><strong>{location.subscores.vacancy}/100</strong></div>
+              <div><span>Nachfrage</span><strong>{location.subscores.demand}/100</strong></div>
+              <div><span>Mikrolage</span><strong>{location.subscores.microLocation}/100</strong></div>
+            </div>
             <OpenStreetMapCard street={input.street} postalCode={input.postalCode} city={input.city} coordinates={input.openDataLocation?.address ?? null} print />
-
           </div>
         </section>
 

@@ -1052,3 +1052,68 @@ img,svg,iframe{max-width:100%}
     height:23px;
   }
 }
+
+
+/* V5.7.21 – mobile Titel kompakter, Desktop unverändert */
+@media(max-width:700px){
+  .screen-report .result-hero h1{
+    font-size:clamp(25px,7vw,32px)!important;
+    line-height:1.04!important;
+    letter-spacing:-.035em!important;
+  }
+  .analysis-card .analysis-main-link h2{
+    font-size:19px!important;
+    line-height:1.12!important;
+    letter-spacing:-.02em!important;
+  }
+}
+
+/* PDF Score: dieselben fünf Faktoren wie Analyse/Dashboard */
+.print-score-factors-fixed{
+  width:100%;
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  margin-top:5px;
+  padding-top:5px;
+  border-top:1px solid rgba(203,239,224,.15);
+}
+.print-score-factors-fixed>div{
+  min-width:0;
+  display:grid;
+  justify-items:center;
+  border-right:1px solid rgba(204,239,225,.13);
+}
+.print-score-factors-fixed>div:last-child{border-right:0}
+.print-score-factors-fixed svg{
+  width:13px;
+  height:13px;
+  color:#c8eddc;
+  stroke-width:1.6;
+}
+
+/* PDF: Lagewerte im gleichen Informationsmodell wie die Analyseseite */
+.print-location-details{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:4px;
+  margin-top:5px;
+}
+.print-location-details>div{
+  padding:4px 5px;
+  border:1px solid #dce7e3;
+  border-radius:6px;
+  background:#f8fbfa;
+  min-width:0;
+}
+.print-location-details span{
+  display:block;
+  font-size:6.5px;
+  color:#637a73;
+  line-height:1.05;
+}
+.print-location-details strong{
+  display:block;
+  margin-top:2px;
+  font-size:8px;
+  line-height:1.05;
+}

@@ -1,3 +1,4 @@
+import { Building2, CircleDollarSign, MapPin, PieChart, Sofa } from "lucide-react";
 import { scoreColor } from "../lib/scoreColor";
 
 type Props = { score: number; rating: string };
@@ -20,6 +21,13 @@ export function PrintScoreBadge({ score, rating }: Props) {
       </div>
       <div className="print-score-name">HOMEIQ SCORE</div>
       <div className="print-score-rating-fixed"><i style={{ background: color }} />{rating}</div>
+      <div className="print-score-factors-fixed" aria-label="HomeIQ Score Faktoren">
+        <div title="Nettorendite"><CircleDollarSign aria-hidden="true" /></div>
+        <div title="Eigenkapitalrendite"><PieChart aria-hidden="true" /></div>
+        <div title="Lage"><MapPin aria-hidden="true" /></div>
+        <div title="Objektqualität"><Building2 aria-hidden="true" /></div>
+        <div title="Marktfähigkeit"><Sofa aria-hidden="true" /></div>
+      </div>
     </section>
   );
 }

@@ -69,7 +69,7 @@ export async function lookupSwissCityByPostalCode(postalCode: string): Promise<s
   try {
     const payload = await fetchJsonWithTimeout<{ city?: string | null }>(
       `/api/location?lookupPostalCode=${encodeURIComponent(value)}`,
-      5000,
+      7000,
     );
     return payload.city?.trim() || null;
   } catch {
