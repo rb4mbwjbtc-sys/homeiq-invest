@@ -30,6 +30,19 @@ const factorWeights = {
 const signedMoney = (value: number) =>
   `${value >= 0 ? "+ " : "− "}${money(Math.abs(value))}`;
 
+const propertyTypeLabels: Record<string, string> = {
+  wohnung: "Eigentumswohnung",
+  efh: "Einfamilienhaus",
+  doppelhaus: "Doppelhaushälfte",
+  reihenhaus: "Reihenhaus",
+  mfh: "Mehrfamilienhaus",
+};
+
+const formatDisplayRooms = (rooms: number) => {
+  if (!rooms || rooms <= 0) return "";
+  return `${Number.isInteger(rooms) ? rooms.toFixed(0) : rooms.toFixed(1)} Zimmer`;
+};
+
 export function Result() {
   const { id } = useParams();
   const input = id ? findAnalysis(id) : undefined;
@@ -49,6 +62,11 @@ export function Result() {
   const market = result.marketAnalysis;
   const location = result.locationAnalysis;
   const dynamicScoreColor = scoreColor(result.score);
+  const displayTitle = [
+    propertyTypeLabels[input.propertyType] || "Immobilie",
+    input.city,
+    input.propertyType === "mfh" ? "" : formatDisplayRooms(input.rooms),
+  ].filter(Boolean).join(" · ");
 
 
   const exportPdf = async () => {
@@ -114,8 +132,8 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.18</span>
-            <h1>{input.title}</h1>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.19</span>
+            <h1>{displayTitle}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
             </p>
@@ -302,8 +320,8 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.18</span></div>
-            <h1>{input.title}</h1>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.19</span></div>
+            <h1>{displayTitle}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
             </p>

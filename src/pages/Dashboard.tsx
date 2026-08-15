@@ -1,9 +1,15 @@
-import { ArrowRight, Plus, Sparkles } from "lucide-react";
+import { ArrowRight, Building2, CircleDollarSign, MapPin, PieChart, Plus, Sofa, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { loadAnalyses } from "../lib/storage";
 import { HomeIQScoreCard } from "../components/HomeIQScoreCard";
 
-const weights = [["Nettorendite","35 %"],["Lage","25 %"],["Eigenkapitalrendite","20 %"],["Objektqualität","12 %"],["Marktfähigkeit","8 %"]];
+const weights = [
+  { name: "Nettorendite", weight: "35 %", icon: CircleDollarSign },
+  { name: "Eigenkapitalrendite", weight: "20 %", icon: PieChart },
+  { name: "Lage", weight: "25 %", icon: MapPin },
+  { name: "Objektqualität", weight: "12 %", icon: Building2 },
+  { name: "Marktfähigkeit", weight: "8 %", icon: Sofa },
+];
 
 export function Dashboard() {
   const remainingFreeAnalyses = Math.max(0, 3 - loadAnalyses().length);
@@ -24,9 +30,16 @@ export function Dashboard() {
       </section>
 
       <section className="panel dashboard-wide-panel score-model-panel">
-        <span className="eyebrow">SCORE-MODELL</span>
+        <span className="eyebrow">HOMEIQ SCORE</span>
         <h2>Transparent gewichtet</h2>
-        <div className="weight-list">{weights.map(([name,weight]) => <div key={name}><span>{name}</span><strong>{weight}</strong></div>)}</div>
+        <div className="weight-list">
+          {weights.map(({ name, weight, icon: Icon }) => (
+            <div key={name}>
+              <span className="weight-name"><Icon size={19} aria-hidden="true"/>{name}</span>
+              <strong>{weight}</strong>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="dashboard-premium-card">

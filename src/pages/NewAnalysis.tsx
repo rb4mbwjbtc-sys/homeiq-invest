@@ -7,6 +7,7 @@ import {
   Landmark,
   Loader2,
   MapPin,
+  Minus,
   Plus,
   Rows3,
   Sparkles,
@@ -31,6 +32,48 @@ const formatRooms = (rooms: number) => {
   if (!rooms || rooms <= 0) return "";
   return `${Number.isInteger(rooms) ? rooms.toFixed(0) : rooms.toFixed(1)} Zimmer`;
 };
+
+const floorOptions = [
+  "EG",
+  ...Array.from({ length: 15 }, (_, index) => `${index + 1}. OG`),
+  "Dachgeschoss",
+  "Attika / PH",
+];
+
+type NumberStepperProps = {
+  value: number;
+  step?: number;
+  min?: number;
+  onChange: (value: number) => void;
+  ariaLabel: string;
+};
+
+function NumberStepper({ value, step = 1, min = 0, onChange, ariaLabel }: NumberStepperProps) {
+  const normalize = (next: number) => {
+    const safe = Math.max(min, next);
+    return Number(safe.toFixed(step < 1 ? 1 : 0));
+  };
+
+  return (
+    <div className="number-stepper">
+      <button type="button" onClick={() => onChange(normalize((Number(value) || 0) - step))} aria-label={`${ariaLabel} verringern`}>
+        <Minus size={16} />
+      </button>
+      <input
+        type="number"
+        step={step}
+        min={min}
+        value={Number.isFinite(value) ? value : ""}
+        onChange={(event) => onChange(normalize(Number(event.target.value) || 0))}
+        aria-label={ariaLabel}
+        inputMode="decimal"
+      />
+      <button type="button" onClick={() => onChange(normalize((Number(value) || 0) + step))} aria-label={`${ariaLabel} erhöhen`}>
+        <Plus size={16} />
+      </button>
+    </div>
+  );
+}
 
 const features = [
   "Balkon",
@@ -317,7 +360,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.7.18</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.7.19</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -407,12 +450,7 @@ export function NewAnalysis() {
                 </label>
                 <label>
                   Zimmer
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={form.rooms || ""}
-                    onChange={(event) => set("rooms", Number(event.target.value))}
-                  />
+                  <NumberStepper value={form.rooms} step={0.5} min={0.5} onChange={(value) => set("rooms", value)} ariaLabel="Zimmer" />
                 </label>
               </>
             )}
@@ -470,32 +508,18 @@ export function NewAnalysis() {
                 <label>
                   Stockwerk
                   <select value={form.floor} onChange={(event) => set("floor", event.target.value)}>
-                    <option>EG</option>
-                    <option>1. OG</option>
-                    <option>2. OG</option>
-                    <option>3. OG</option>
-                    <option>Attika / PH</option>
-                    <option>Dachgeschoss</option>
+                    {floorOptions.map((floor) => <option key={floor}>{floor}</option>)}
                   </select>
                 </label>
                 <label>
                   Badezimmer
-                  <input
-                    type="number"
-                    value={form.bathrooms}
-                    onChange={(event) => set("bathrooms", Number(event.target.value))}
-                  />
+                  <NumberStepper value={form.bathrooms} step={1} min={0} onChange={(value) => set("bathrooms", value)} ariaLabel="Badezimmer" />
                 </label>
               </>
             )}
             <label>
               Parkplätze total
-              <input
-                type="number"
-                min="0"
-                value={form.parkingSpaces}
-                onChange={(event) => set("parkingSpaces", Number(event.target.value))}
-              />
+              <NumberStepper value={form.parkingSpaces} step={1} min={0} onChange={(value) => set("parkingSpaces", value)} ariaLabel="Parkplätze total" />
             </label>
           </div>
 
@@ -546,12 +570,7 @@ export function NewAnalysis() {
                     </label>
                     <label>
                       Zimmer
-                      <input
-                        type="number"
-                        step="0.5"
-                        value={unit.rooms}
-                        onChange={(event) => setUnit(unit.id, "rooms", Number(event.target.value))}
-                      />
+                      <NumberStepper value={unit.rooms} step={0.5} min={0.5} onChange={(value) => setUnit(unit.id, "rooms", value)} ariaLabel={`Zimmer Wohneinheit ${index + 1}`} />
                     </label>
                     <label>
                       Wohnfläche (m²)
@@ -567,11 +586,7 @@ export function NewAnalysis() {
                         value={unit.floor}
                         onChange={(event) => setUnit(unit.id, "floor", event.target.value)}
                       >
-                        <option>EG</option>
-                        <option>1. OG</option>
-                        <option>2. OG</option>
-                        <option>3. OG</option>
-                        <option>Attika / PH</option>
+                        {floorOptions.map((floor) => <option key={floor}>{floor}</option>)}
                       </select>
                     </label>
                     <label>

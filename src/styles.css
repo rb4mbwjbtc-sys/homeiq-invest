@@ -1007,3 +1007,33 @@ img,svg,iframe{max-width:100%}
 .homeiq-score-card.compact .homeiq-score-factors{
   grid-template-columns:repeat(5,minmax(0,1fr));
 }
+
+
+/* V5.7.19 – HomeIQ Score Modell mit denselben Icons wie die Score-Karte */
+.score-model-panel .weight-name{display:inline-flex;align-items:center;gap:10px}
+.score-model-panel .weight-name svg{flex:0 0 auto;color:var(--green)}
+
+/* V5.7.19 – Stepper für Zimmer, Badezimmer und Parkplätze */
+.number-stepper{
+  display:grid;grid-template-columns:42px minmax(0,1fr) 42px;align-items:stretch;
+  width:100%;min-width:0;border:1px solid var(--border);border-radius:10px;
+  overflow:hidden;background:#fff
+}
+.number-stepper input{
+  width:100%;min-width:0;border:0!important;border-radius:0!important;
+  text-align:center;padding-left:8px!important;padding-right:8px!important;
+  -moz-appearance:textfield
+}
+.number-stepper input::-webkit-outer-spin-button,.number-stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.number-stepper button{
+  display:grid;place-items:center;border:0;background:#f7faf8;color:var(--green-dark);
+  cursor:pointer;padding:0;min-height:44px
+}
+.number-stepper button:first-child{border-right:1px solid var(--border)}
+.number-stepper button:last-child{border-left:1px solid var(--border)}
+.number-stepper button:hover{background:var(--green-soft)}
+.number-stepper button:active{background:#dceee7}
+@media(max-width:700px){
+  .number-stepper{grid-template-columns:48px minmax(0,1fr) 48px}
+  .number-stepper button{min-height:48px}
+}
