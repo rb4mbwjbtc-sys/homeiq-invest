@@ -1131,3 +1131,77 @@ img,svg,iframe{max-width:100%}
 }
 .print-open-data-grid span{display:block;font-size:6px;color:#637a73;line-height:1.05}
 .print-open-data-grid strong{display:block;margin-top:2px;font-size:7.5px;line-height:1.05}
+
+
+/* V5.7.23 – Analyse- und gespeicherte Titel kompakter */
+.screen-report .result-hero h1{
+  font-size:clamp(30px,3.1vw,46px);
+  line-height:1.03;
+  letter-spacing:-.038em;
+}
+.analysis-card .analysis-main-link h2{
+  font-size:21px;
+  line-height:1.12;
+  letter-spacing:-.02em;
+}
+@media(max-width:700px){
+  .screen-report .result-hero h1{
+    font-size:clamp(21px,5.8vw,27px)!important;
+    line-height:1.04!important;
+  }
+  .analysis-card .analysis-main-link h2{
+    font-size:17px!important;
+    line-height:1.12!important;
+  }
+}
+
+/* V5.7.23 – PDF Score vollständig sichtbar */
+.print-score-badge{
+  height:150px;
+  padding:7px 8px 7px;
+  overflow:hidden;
+}
+.print-score-ring-fixed{
+  flex:0 0 82px;
+  width:82px;
+  height:82px;
+}
+.print-score-ring-fixed svg{
+  width:82px;
+  height:82px;
+}
+.print-score-ring-center strong{font-size:28px}
+.print-score-ring-center span{font-size:7px;margin-top:3px}
+.print-score-name{margin-top:2px;font-size:5.6px}
+.print-score-rating-fixed{margin-top:2px;padding:2px 5px;font-size:5.4px}
+.print-score-factors-fixed{margin-top:4px;padding-top:4px}
+.print-score-factors-fixed svg{width:11px;height:11px}
+
+/* V5.7.23 – Objektdaten im PDF im Kartenstil */
+.print-object-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:4px;
+  margin-top:4px;
+}
+.print-object-grid>div{
+  min-width:0;
+  padding:5px 6px;
+  border:1px solid #dce7e3;
+  border-radius:6px;
+  background:#f8fbfa;
+}
+.print-object-grid span{
+  display:block;
+  font-size:6.3px;
+  color:#637a73;
+  line-height:1.05;
+}
+.print-object-grid strong{
+  display:block;
+  margin-top:2px;
+  font-size:7.6px;
+  line-height:1.08;
+  color:#173a31;
+}
+.print-object-grid .wide{grid-column:1/-1}

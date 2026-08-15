@@ -132,7 +132,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.22</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.23</span>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -321,7 +321,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.22</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.23</span></div>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
@@ -407,13 +407,19 @@ export function Result() {
           </div>
           <div>
             <h2>OBJEKTDATEN</h2>
-            <p>Objekttyp {propertyTypeLabels[input.propertyType] || input.propertyType}</p>
-            <p>Baujahr {input.yearBuilt || input.openDataLocation?.building?.constructionYear || "—"}{!input.yearBuilt && input.openDataLocation?.building?.constructionYear ? " (Open Data)" : ""}</p>
-            <p>Letzte Renovation {input.renovatedYear || "—"}</p>
-            <p>Wohnfläche {number(input.livingArea)} m²</p>
-            <p>Zimmer {input.rooms || "—"}</p>
-            <p>Parkplätze {input.parkingSpaces}</p>
-            <p>Ausstattung {input.features.join(", ") || "—"}</p>
+            <div className="print-object-grid">
+              <div><span>Objekttyp</span><strong>{propertyTypeLabels[input.propertyType] || input.propertyType}</strong></div>
+              <div><span>Wohnfläche</span><strong>{number(input.livingArea)} m²</strong></div>
+              <div><span>Zimmer</span><strong>{input.rooms || "—"}</strong></div>
+              <div><span>Stockwerk</span><strong>{input.floor || "—"}</strong></div>
+              <div><span>Baujahr</span><strong>{input.yearBuilt || input.openDataLocation?.building?.constructionYear || "—"}{!input.yearBuilt && input.openDataLocation?.building?.constructionYear ? " · Open Data" : ""}</strong></div>
+              <div><span>Letzte Renovation</span><strong>{input.renovatedYear || "—"}</strong></div>
+              <div><span>Zustand</span><strong>{input.condition || "—"}</strong></div>
+              <div><span>Ausbaustandard</span><strong>{input.quality || "—"}</strong></div>
+              <div><span>Badezimmer</span><strong>{input.bathrooms}</strong></div>
+              <div><span>Parkplätze</span><strong>{input.parkingSpaces}</strong></div>
+              <div className="wide"><span>Ausstattung</span><strong>{input.features.join(", ") || "—"}</strong></div>
+            </div>
           </div>
           <div className="print-location-column">
             <h2>LAGE</h2>

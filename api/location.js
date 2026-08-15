@@ -114,6 +114,7 @@ async function runDiagnostic(name, source, fn) {
 async function lookupCityByPostalCode(postalCode) {
   const value = String(postalCode || "").trim();
   if (!/^\d{4}$/.test(value)) return null;
+
   const params = new URLSearchParams({
     searchText: value,
     type: "locations",
@@ -121,26 +122,40 @@ async function lookupCityByPostalCode(postalCode) {
     sr: "2056",
     limit: "20",
   });
-  const payload = await fetchJson(`${GEOADMIN_LOCATION_SEARCH}?${params}`, {}, 4200);
+
+  const payload = await fetchJson(`${GEOADMIN_LOCATION_SEARCH}?${params}`, {}, 5200);
   const candidates = payload.results || [];
+  const exactPostalCode = new RegExp(`(^|\\s)${value}(\\s|$)`);
+
   const exact = candidates.find((item) => {
-    const label = cleanLabel(item.attrs?.label || "");
-    const detail = cleanLabel(item.attrs?.detail || "");
-    const exactPostalCode = new RegExp(`(^|\\s)${value}(\\s|$)`);
-    return exactPostalCode.test(label) || exactPostalCode.test(detail);
+    const attrs = item.attrs || {};
+    const label = cleanLabel(attrs.label || "");
+    const detail = cleanLabel(attrs.detail || "");
+    return String(attrs.num || "") === value ||
+      exactPostalCode.test(label) ||
+      exactPostalCode.test(detail);
   });
-  // Nie irgendeinen ersten Suchtreffer übernehmen:
-  // Wenn die PLZ nicht exakt im Resultat vorkommt, bleibt Ort leer.
+
   if (!exact) return null;
-  const label = cleanLabel(exact.attrs?.label || "");
-  // GeoAdmin ZIP-origin labels normally contain “PLZ Ort”. Remove the PLZ
-  // and optional canton/markup suffixes, while preserving multi-word place names.
-  let city = label.replace(new RegExp(`^.*?${value}\\s*`), "").trim();
-  city = city.replace(/\s*[-–|].*$/, "").replace(/\s*\([^)]*\)\s*$/, "").trim();
-  if (!city) {
-    const detail = cleanLabel(exact.attrs?.detail || "");
-    city = detail.replace(new RegExp(`^.*?${value}\\s*`), "").trim();
-  }
+
+  const extractCity = (rawValue) => {
+    let city = cleanLabel(rawValue || "");
+    if (!city) return "";
+
+    city = city
+      .replace(new RegExp(`(^|\\s)${value}(?=\\s|$)`, "g"), " ")
+      .replace(/\s*\([^)]*\)\s*/g, " ")
+      .replace(/\s*[-–|]\s*.*$/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    city = city.replace(/\s+CH(?:\s+.*)?$/i, "").trim();
+    return city;
+  };
+
+  let city = extractCity(exact.attrs?.label);
+  if (!city) city = extractCity(exact.attrs?.detail);
+
   return city || null;
 }
 
