@@ -431,7 +431,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.8.1</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.8.2</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -894,7 +894,7 @@ export function NewAnalysis() {
                 </button>
                 {form.regionalMarketRentPerSqm <= 0 && (
                   <small className="market-data-unavailable">
-                    Testmodus: Beim Klick versucht HomeIQ die Marktmietdaten erneut zu laden und verwendet bei fehlenden lokalen Daten den BFS-Fallback (Stufe 4).
+                    Testmodus: Beim Klick lädt HomeIQ die Marktmietdaten erneut. Fehlen lokale Daten, wird Stufe 4 verwendet; falls der BFS-Download technisch nicht erreichbar ist, greift der gebündelte verifizierte Kantons-Fallback.
                   </small>
                 )}
                 {marketRentGenerated !== null && generatedMarket && (

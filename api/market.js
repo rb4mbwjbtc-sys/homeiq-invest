@@ -224,6 +224,57 @@ const CANTON_NAMES = {
   VD:"Vaud",VS:"Valais",ZG:"Zug",ZH:"Zürich"
 };
 
+// Gebündelte, öffentlich verifizierte Kantons-Basiswerte.
+// Diese Werte dienen AUSSCHLIESSLICH als Notfall-Fallback, falls die
+// aktuelle BFS-XLS-Ressource im Serverless-Umfeld nicht abrufbar ist.
+// Es werden keine erfundenen Werte verwendet.
+//
+// ZH / FR: BFS Strukturerhebung 2024, publiziert 05.03.2026.
+// AG: öffentlich publiziertes Mietpreisniveau Kanton Aargau 2023
+//     (Angebotsmiete, Wüest & Partner, publiziert durch Kanton Aargau).
+//
+// Sobald ein belastbarer Zimmer-spezifischer BFS-Wert geladen werden kann,
+// hat dieser IMMER Vorrang.
+const BUNDLED_CANTON_RENT_FALLBACK = {
+  ZH: {
+    value: 21.3,
+    source: "BFS – durchschnittlicher Mietpreis pro m², Kanton Zürich",
+    rentType: "EXISTING",
+    sourceYear: 2024,
+  },
+  FR: {
+    value: 15.8,
+    source: "BFS – durchschnittlicher Mietpreis pro m², Kanton Freiburg",
+    rentType: "EXISTING",
+    sourceYear: 2024,
+  },
+  AG: {
+    value: 17.3,
+    source: "Kanton Aargau – veröffentlichtes Mietpreisniveau",
+    rentType: "ASKING",
+    sourceYear: 2023,
+  },
+};
+
+function bundledCantonRentFallback(canton) {
+  if (!canton?.code) return null;
+  const row = BUNDLED_CANTON_RENT_FALLBACK[canton.code];
+  if (!row) return null;
+
+  return {
+    value: row.value,
+    tier: 4,
+    source: row.source,
+    rentType: row.rentType,
+    sourceYear: row.sourceYear,
+    geographyLevel: "canton",
+    geographyName: canton.name,
+    uncertaintyPct: 0.15,
+    dataQuality: "mittel",
+    fallbackMode: "bundled-canton-average",
+  };
+}
+
 function cantonCodeFromProps(props={}) {
   const blob = normalizeText(Object.values(props).join(" "));
   for (const [code,name] of Object.entries(CANTON_NAMES)) {
@@ -355,22 +406,44 @@ function bfsRoomValues(matrix, cantonName, cantonCode) {
 }
 
 async function tryBfsRentBenchmark(postalCode, city, rooms) {
+  const canton = await resolveCanton(postalCode, city);
+  if (!canton) return null;
+
+  // 1) Bevorzugt: exakter BFS-Wert nach Kanton + Zimmerzahl.
+  //    Halbe Zimmer werden wie definiert linear interpoliert.
   try {
-    const canton=await resolveCanton(postalCode,city);
-    if (!canton) return null;
-    const XLSX=await import("xlsx");
-    const buffer=await fetchArrayBuffer(BFS_RENT_XLS,{},10000);
-    const workbook=XLSX.read(buffer,{type:"array"});
-    const values={};
+    const XLSX = await import("xlsx");
+    const buffer = await fetchArrayBuffer(BFS_RENT_XLS, {}, 10000);
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const values = {};
+
     for (const name of workbook.SheetNames) {
-      const sheet=workbook.Sheets[name];
-      let matrix=XLSX.utils.sheet_to_json(sheet,{header:1,raw:false,defval:""});
-      matrix=fillMerged(matrix,sheet["!merges"]||[]);
-      Object.assign(values,bfsRoomValues(matrix,canton.name,canton.code));
+      const sheet = workbook.Sheets[name];
+      let matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
+      matrix = fillMerged(matrix, sheet["!merges"] || []);
+      Object.assign(values, bfsRoomValues(matrix, canton.name, canton.code));
     }
-    const value=interpolateRoomBenchmark(values,rooms);
-    return value==null?null:resultRent(value,4,"BFS – Mietpreis pro m² nach Zimmerzahl und Kanton","EXISTING",BFS_RENT_YEAR,"canton",canton.name);
-  } catch { return null; }
+
+    const value = interpolateRoomBenchmark(values, rooms);
+    if (value != null) {
+      return resultRent(
+        value,
+        4,
+        "BFS – Mietpreis pro m² nach Zimmerzahl und Kanton",
+        "EXISTING",
+        BFS_RENT_YEAR,
+        "canton",
+        canton.name,
+      );
+    }
+  } catch {
+    // Der DAM-XLS-Endpunkt ist in Serverless-Umgebungen nicht immer
+    // zuverlässig erreichbar. Daher deterministischer lokaler Fallback.
+  }
+
+  // 2) Deterministischer Notfall-Fallback aus verifizierten öffentlichen
+  //    Kantonswerten. Keine Netzwerkanfrage, keine Excel-Auswertung.
+  return bundledCantonRentFallback(canton);
 }
 
 async function tryZurichRentBenchmark(city, rooms) {
@@ -436,7 +509,7 @@ async function fetchMarketLayers(city, propertyType, rooms, postalCode) {
     rentGeographyLevel:rent?.geographyLevel??null,rentGeographyName:rent?.geographyName??null,
     rentUncertaintyPct:rent?.uncertaintyPct??null,rentDataQuality:rent?.dataQuality??null,
     confidence,radiusKm:null,discoveredDatasets:discovered,tiers,
-    note:rent?.value?`Marktmiete V1: ${rent.value.toFixed(2)} CHF/m² · Stufe ${rent.tier} · ${rent.geographyName || city} · ohne Objekt-Zu-/Abschläge.`:
+    note:rent?.value?`Marktmiete V1: ${rent.value.toFixed(2)} CHF/m² · Stufe ${rent.tier} · ${rent.geographyName || city}${rent.fallbackMode === "bundled-canton-average" ? " · gebündelter Kantons-Fallback" : ""} · ohne Objekt-Zu-/Abschläge.`:
       "Kein belastbarer öffentlicher CHF/m²-Mietbenchmark gefunden. HomeIQ erfindet keinen Ersatzwert."
   };
 }
