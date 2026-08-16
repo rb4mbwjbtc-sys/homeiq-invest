@@ -342,7 +342,7 @@ export function NewAnalysis() {
       }));
       return;
     }
-    set("monthlyRent", Math.max(0, Math.round(generatedMarket.estimatedMonthlyMarketRent - (form.parkingMonthlyRent || 0))));
+    set("monthlyRent", Math.max(0, Math.round(generatedMarket.estimatedMonthlyMarketRent)));
   };
 
   const submit = () => {
@@ -373,7 +373,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.7.25</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.8</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -842,17 +842,17 @@ export function NewAnalysis() {
                     <div className="market-card-heading">
                       <span className="eyebrow">MARKTMIETANALYSE</span>
                       <h3>Geschätzte Marktmiete</h3>
-                      <p>Die Schätzung basiert auf Lage, Objektmerkmalen und dem gefundenen regionalen Mietbenchmark.</p>
+                      <p>Die Schätzung basiert in V1 auf Wohnfläche, Zimmerzahl und der bestverfügbaren öffentlichen Mietstatistik.</p>
                     </div>
                     <div className="market-main-value">
                       <span>GESCHÄTZTE MARKTMIETE</span>
                       <strong>{money(generatedMarket.estimatedMonthlyMarketRent)} <em>/ Monat</em></strong>
-                      <small>Marktspanne: {money(generatedMarket.estimatedMonthlyMarketRent * 0.90)} – {money(generatedMarket.estimatedMonthlyMarketRent * 1.10)} / Monat</small>
+                      <small>Marktspanne: {money(generatedMarket.estimatedMonthlyMarketRentLow)} – {money(generatedMarket.estimatedMonthlyMarketRentHigh)} / Monat</small>
                     </div>
                     {generatedMarket.currentMonthlyRent > 0 && (
                       <div className="market-comparison-row">
                         <div><span>IHRE EINGETRAGENE NETTOMIETE</span><strong>{money(generatedMarket.currentMonthlyRent)} / Mt.</strong></div>
-                        <b className={generatedMarket.rentDifferencePercent >= 0 ? "positive-text" : "negative-text"}>{generatedMarket.rentDifferencePercent >= 0 ? "+" : ""}{generatedMarket.rentDifferencePercent.toFixed(1)} %</b>
+                        <b className={generatedMarket.rentDifferencePercent <= 0 ? "positive-text" : "negative-text"}>{generatedMarket.rentDifferencePercent >= 0 ? "+" : ""}{generatedMarket.rentDifferencePercent.toFixed(1)} % {generatedMarket.rentDifferencePercent < 0 ? "unter" : generatedMarket.rentDifferencePercent > 0 ? "über" : "auf"} Marktniveau</b>
                       </div>
                     )}
                     {form.propertyType === "mfh" && (
@@ -864,7 +864,8 @@ export function NewAnalysis() {
                       <button type="button" className="button market-accept" onClick={useMarketRent}>{form.propertyType === "mfh" ? "Marktmieten für alle Wohnungen übernehmen" : "Marktmiete übernehmen"}</button>
                       <button type="button" className="button text-choice" onClick={() => setMarketRentGenerated(null)}>Nicht übernehmen</button>
                     </div>
-                    <small className="market-source">Datenbasis: {form.openDataLocation.market.rentSource || "öffentliche Marktdaten"} · Datenqualität: {form.openDataLocation.market.confidence}</small>
+                    <small className="market-source">Datenbasis: {form.openDataLocation.market.rentSource || "öffentliche Marktdaten"}{form.openDataLocation.market.rentGeographyName ? ` · ${form.openDataLocation.market.rentGeographyName}` : ""}{form.openDataLocation.market.rentSourceYear ? ` · Stand ${form.openDataLocation.market.rentSourceYear}` : ""}{form.openDataLocation.market.rentSourceTier ? ` · Stufe ${form.openDataLocation.market.rentSourceTier}` : ""}{form.openDataLocation.market.rentDataQuality ? ` · Datenqualität: ${form.openDataLocation.market.rentDataQuality}` : ""}</small>
+                    <small className="market-source">V1 ohne Zu-/Abschläge für Zustand, Standard, Stockwerk, Ausstattung, Baujahr oder Parkplatz.</small>
                   </div>
                 )}
               </div>

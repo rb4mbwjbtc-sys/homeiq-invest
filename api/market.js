@@ -1,4 +1,9 @@
 const OPENDATA_SEARCH = "https://ckan.opendata.swiss/api/3/action/package_search";
+const GEOADMIN_SEARCH = "https://api3.geo.admin.ch/rest/services/ech/SearchServer";
+const GEOADMIN_IDENTIFY = "https://api3.geo.admin.ch/rest/services/ech/MapServer/identify";
+const CANTON_LAYER = "ch.swisstopo.swissboundaries3d-kanton-flaeche.fill";
+const BFS_RENT_XLS = "https://dam-api.bfs.admin.ch/hub/api/dam/assets/36398447/master";
+const BFS_RENT_YEAR = 2024;
 
 const cleanLabel = (value = "") => String(value).replace(/<[^>]+>/g, "").replace(/#/g, "").replace(/\s+/g, " ").trim();
 
@@ -44,6 +49,26 @@ async function fetchText(url, options = {}, timeoutMs = 4000) {
     });
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     return await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchArrayBuffer(url, options = {}, timeoutMs = 7000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        Accept: "application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/octet-stream,*/*",
+        "User-Agent": "HomeIQ-Invest/5.8 (official Swiss market-rent data)",
+        ...(options.headers || {}),
+      },
+    });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    return await response.arrayBuffer();
   } finally {
     clearTimeout(timer);
   }
@@ -102,31 +127,197 @@ function numberFromRecord(record, keyPatterns, min, max) {
   return null;
 }
 
+
+const normalizeText = (value = "") =>
+  cleanLabel(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ").trim();
+
+const qualityForTier = (tier) => ({1:"sehr hoch",2:"hoch",3:"mittel-hoch",4:"mittel"}[tier] || null);
+const uncertaintyForTier = (tier) => ({1:0.05,2:0.07,3:0.10,4:0.15}[tier] ?? 0.15);
+
+function interpolateRoomBenchmark(valuesByRoom, rooms) {
+  const entries = Object.entries(valuesByRoom)
+    .map(([room,value]) => [Number(room),Number(value)])
+    .filter(([room,value]) => Number.isFinite(room) && Number.isFinite(value) && value >= 5 && value <= 100)
+    .sort((a,b) => a[0]-b[0]);
+  if (!entries.length) return null;
+  const target = Number(rooms) || 0;
+  if (!target) return entries[Math.floor(entries.length/2)][1];
+  const exact = entries.find(([room]) => Math.abs(room-target) < 0.001);
+  if (exact) return exact[1];
+  const lower = [...entries].reverse().find(([room]) => room < target);
+  const upper = entries.find(([room]) => room > target);
+  if (lower && upper) {
+    const ratio = (target-lower[0])/(upper[0]-lower[0]);
+    return lower[1] + ratio*(upper[1]-lower[1]);
+  }
+  return lower?.[1] ?? upper?.[1] ?? null;
+}
+
+function resultRent(value, tier, source, rentType, sourceYear, geographyLevel, geographyName) {
+  if (!Number.isFinite(value) || value < 5 || value > 100) return null;
+  return {
+    value: Math.round(value*100)/100,
+    tier, source, rentType, sourceYear, geographyLevel, geographyName,
+    uncertaintyPct: uncertaintyForTier(tier),
+    dataQuality: qualityForTier(tier),
+  };
+}
+
+function explicitSqmRentFromRow(row) {
+  return numberFromRecord(
+    row,
+    ["mietpreis pro m", "miete pro m", "m2", "m²", "quadratmeter", "qm"],
+    5, 100,
+  );
+}
+
+function roomFromBlob(blob) {
+  const text = normalizeText(blob);
+  const m = text.match(/(?:^|\s)([1-6])(?:[.,]0)?\s*(?:zimmer|zi|room|piece|locali)?(?:\s|$)/);
+  return m ? Number(m[1]) : null;
+}
+
+function roomValuesFromRows(rows, requireAsking = false) {
+  const values = {};
+  for (const row of rows) {
+    const blob = Object.values(row).join(" ");
+    const normalized = normalizeText(blob);
+    if (requireAsking && !/(angebot|asking|inserat)/.test(normalized)) continue;
+    const room = roomFromBlob(blob);
+    if (!room) continue;
+    const value = explicitSqmRentFromRow(row);
+    if (value != null && values[room] == null) values[room] = value;
+  }
+  return values;
+}
+
+async function tryWinterthurAskingRentBenchmark(city, rooms) {
+  if (!/^winterthur$/i.test(city.trim())) return null;
+  try {
+    const search = await fetchJson(`${OPENDATA_SEARCH}?${new URLSearchParams({q:"Angebots- und Bestandesmieten Winterthur",rows:"10"})}`, {}, 3500);
+    const pkg = (search.result?.results || []).find((x) => /angebots.*bestandesmieten/i.test(displayName(x.title)));
+    const resource = (pkg?.resources || []).find((r) => /csv/i.test(String(r.format || "")));
+    if (!resource?.url) return null;
+    const rows = parseCsv(await fetchText(resource.url, {}, 4500));
+    const value = interpolateRoomBenchmark(roomValuesFromRows(rows, true), rooms);
+    return value == null ? null : resultRent(value, 1, "Stadt Winterthur – Angebotsmieten", "ASKING", 2026, "city", "Winterthur");
+  } catch { return null; }
+}
+
+async function tryGenericOfficialRentBenchmark(city, rooms, discovered) {
+  for (const item of (discovered || []).filter((x) => x.kind === "rent").slice(0,3)) {
+    if (!/\.csv(?:$|\?)/i.test(item.url || "") && !/csv/i.test(item.title || "")) continue;
+    try {
+      const rows = parseCsv(await fetchText(item.url, {}, 3500));
+      const value = interpolateRoomBenchmark(roomValuesFromRows(rows, false), rooms);
+      if (value != null) return resultRent(value, 3, `${item.publisher} – ${item.title}`, "EXISTING", null, "municipality", city);
+    } catch {}
+  }
+  return null;
+}
+
+const CANTON_NAMES = {
+  AG:"Aargau",AI:"Appenzell Innerrhoden",AR:"Appenzell Ausserrhoden",BE:"Bern",BL:"Basel-Landschaft",BS:"Basel-Stadt",
+  FR:"Fribourg",GE:"Genève",GL:"Glarus",GR:"Graubünden",JU:"Jura",LU:"Luzern",NE:"Neuchâtel",NW:"Nidwalden",
+  OW:"Obwalden",SG:"St. Gallen",SH:"Schaffhausen",SO:"Solothurn",SZ:"Schwyz",TG:"Thurgau",TI:"Ticino",UR:"Uri",
+  VD:"Vaud",VS:"Valais",ZG:"Zug",ZH:"Zürich"
+};
+
+function cantonCodeFromProps(props={}) {
+  const blob = normalizeText(Object.values(props).join(" "));
+  for (const [code,name] of Object.entries(CANTON_NAMES)) {
+    if (blob.includes(normalizeText(name)) || new RegExp(`(^|\\s)${code.toLowerCase()}(\\s|$)`).test(blob)) return code;
+  }
+  return null;
+}
+
+async function resolveCanton(postalCode, city) {
+  try {
+    const searchText = [postalCode,city].filter(Boolean).join(" ");
+    const params = new URLSearchParams({searchText,type:"locations",origins:postalCode?"zipcode":"gg25",sr:"2056",limit:"10"});
+    const found = await fetchJson(`${GEOADMIN_SEARCH}?${params}`, {}, 3500);
+    const attrs = found.results?.[0]?.attrs || {};
+    const easting = Number(attrs.y), northing = Number(attrs.x);
+    if (![easting,northing].every(Number.isFinite)) return null;
+    const d=1000;
+    const identify = new URLSearchParams({
+      geometry:`${easting},${northing}`,geometryType:"esriGeometryPoint",geometryFormat:"geojson",sr:"2056",
+      imageDisplay:"1000,1000,96",mapExtent:`${easting-d},${northing-d},${easting+d},${northing+d}`,
+      tolerance:"2",layers:`all:${CANTON_LAYER}`,returnGeometry:"false",lang:"de",limit:"10"
+    });
+    const payload = await fetchJson(`${GEOADMIN_IDENTIFY}?${identify}`, {}, 3500);
+    const props = payload.results?.[0]?.properties || payload.results?.[0]?.attributes || {};
+    const code = cantonCodeFromProps(props);
+    return code ? {code,name:CANTON_NAMES[code]} : null;
+  } catch { return null; }
+}
+
+function fillMerged(matrix, merges=[]) {
+  for (const merge of merges) {
+    const value = matrix[merge.s.r]?.[merge.s.c];
+    if (value == null || value === "") continue;
+    for (let r=merge.s.r;r<=merge.e.r;r++) {
+      matrix[r] ||= [];
+      for (let c=merge.s.c;c<=merge.e.c;c++) if (matrix[r][c] == null || matrix[r][c] === "") matrix[r][c]=value;
+    }
+  }
+  return matrix;
+}
+
+function bfsRoomValues(matrix, cantonName, cantonCode) {
+  const values={};
+  const cantonTokens=[normalizeText(cantonName),normalizeText(cantonCode)];
+  for (let r=0;r<matrix.length;r++) {
+    const row=matrix[r]||[];
+    const rowText=normalizeText(row.join(" "));
+    for (let c=0;c<row.length;c++) {
+      const n=Number(String(row[c]??"").replace(/[^0-9,.-]/g,"").replace(",","."));
+      if (!Number.isFinite(n)||n<5||n>100) continue;
+      const colText=normalizeText(matrix.slice(0,r+1).map((x)=>x?.[c]).filter(Boolean).join(" "));
+      const context=`${rowText} ${colText}`;
+      if (!cantonTokens.some((t)=>t && context.includes(t))) continue;
+      let room=null;
+      for (let k=1;k<=6;k++) if (new RegExp(`(^|\\s)${k}(?: 0)? (?:zimmer|piece|locali)(\\s|$)`).test(context)) {room=k;break;}
+      if (!room) continue;
+      const years=context.match(/20\d{2}/g)||[];
+      if (years.length && !years.includes(String(BFS_RENT_YEAR))) continue;
+      if (values[room] == null) values[room]=n;
+    }
+  }
+  return values;
+}
+
+async function tryBfsRentBenchmark(postalCode, city, rooms) {
+  try {
+    const canton=await resolveCanton(postalCode,city);
+    if (!canton) return null;
+    const XLSX=await import("xlsx");
+    const buffer=await fetchArrayBuffer(BFS_RENT_XLS,{},7000);
+    const workbook=XLSX.read(buffer,{type:"array"});
+    const values={};
+    for (const name of workbook.SheetNames) {
+      const sheet=workbook.Sheets[name];
+      let matrix=XLSX.utils.sheet_to_json(sheet,{header:1,raw:false,defval:""});
+      matrix=fillMerged(matrix,sheet["!merges"]||[]);
+      Object.assign(values,bfsRoomValues(matrix,canton.name,canton.code));
+    }
+    const value=interpolateRoomBenchmark(values,rooms);
+    return value==null?null:resultRent(value,4,"BFS – Mietpreis pro m² nach Zimmerzahl und Kanton","EXISTING",BFS_RENT_YEAR,"canton",canton.name);
+  } catch { return null; }
+}
+
 async function tryZurichRentBenchmark(city, rooms) {
   if (!/^zürich$/i.test(city.trim())) return null;
   try {
-    const search = await fetchJson(`${OPENDATA_SEARCH}?${new URLSearchParams({ q: "Mietpreise in der Stadt Zürich MPE", rows: "5" })}`, {}, 3500);
-    const pkg = (search.result?.results || []).find((p) => /mietpreise/i.test(displayName(p.title)));
+    const search = await fetchJson(`${OPENDATA_SEARCH}?${new URLSearchParams({q:"Mietpreise in der Stadt Zürich MPE",rows:"5"})}`, {}, 3500);
+    const pkg = (search.result?.results || []).find((x) => /mietpreise/i.test(displayName(x.title)));
     const resource = (pkg?.resources || []).find((r) => /csv/i.test(String(r.format || "")));
     if (!resource?.url) return null;
-    const rows = parseCsv(await fetchText(resource.url, {}, 4000));
-    if (!rows.length) return null;
-    const roomRounded = Math.max(1, Math.round(Number(rooms) || 3));
-    const candidates = rows.filter((row) => {
-      const blob = Object.values(row).join(" ").toLowerCase();
-      const roomMatch = blob.match(/(?:^|\D)([1-6])(?:\.?0)?\s*(?:zimmer|zi|z)?(?:\D|$)/i);
-      return !roomMatch || Number(roomMatch[1]) === roomRounded;
-    });
-    let best = null;
-    for (const row of candidates.length ? candidates : rows) {
-      const n = numberFromRecord(row, ["median", "m2", "m²", "qm", "quadratmeter"], 5, 100);
-      if (n != null) { best = n; break; }
-    }
-    if (best == null) return null;
-    return { value: best, source: "Open Data Zürich – Mietpreiserhebung", confidence: "hoch" };
-  } catch {
-    return null;
-  }
+    const rows=parseCsv(await fetchText(resource.url,{},4500));
+    const value=interpolateRoomBenchmark(roomValuesFromRows(rows,false),rooms);
+    return value==null?null:resultRent(value,2,"Open Data Zürich – Mietpreiserhebung","EXISTING",2024,"city","Zürich");
+  } catch { return null; }
 }
 
 async function tryZurichPriceBenchmark(city, propertyType) {
@@ -153,47 +344,34 @@ async function tryZurichPriceBenchmark(city, propertyType) {
   }
 }
 
-async function fetchMarketLayers(city, propertyType, rooms) {
-  const [discovered, rent, price] = await Promise.all([
-    discoverOpenData(city),
-    tryZurichRentBenchmark(city, rooms),
-    tryZurichPriceBenchmark(city, propertyType),
-  ]);
+async function fetchMarketLayers(city, propertyType, rooms, postalCode) {
+  const discoveredPromise=discoverOpenData(city);
+  const pricePromise=tryZurichPriceBenchmark(city,propertyType);
 
-  const tiers = [
-    {
-      tier: 1,
-      name: "Bundesdaten / schweizweite Open Data",
-      status: "verwendet",
-      detail: "GeoAdmin, GWR, BFS, ARE, BAFU und OpenTransportData bilden das stabile Grundgerüst.",
-    },
-    {
-      tier: 2,
-      name: "Kantonale und kommunale Open Data",
-      status: discovered.length ? "gefunden" : "nicht_verfuegbar",
-      detail: discovered.length ? `${discovered.length} potenziell passende offene Marktdatensätze im Katalog gefunden.` : "Für diesen Ort wurde aktuell kein direkt passender lokaler Marktdatensatz gefunden.",
-    },
-    {
-      tier: 3,
-      name: "Kommerzielle Marktdaten",
-      status: "vorbereitet",
-      detail: "Adapter für Raiffeisen Gemeindeinfo, ImmoScout24/SMG und Comparis sind architektonisch vorgesehen, bleiben ohne offiziellen API-/Lizenzzugang deaktiviert.",
-    },
+  let rent=await tryWinterthurAskingRentBenchmark(city,rooms);
+  if (!rent) rent=await tryZurichRentBenchmark(city,rooms);
+  const discovered=await discoveredPromise;
+  if (!rent) rent=await tryGenericOfficialRentBenchmark(city,rooms,discovered);
+  if (!rent) rent=await tryBfsRentBenchmark(postalCode,city,rooms);
+
+  const price=await pricePromise;
+  const used=rent?.tier??null;
+  const tiers=[
+    {tier:1,name:"Lokale öffentliche Angebotsmieten",status:used===1?"verwendet":"nicht_verfuegbar",detail:used===1?`Verwendet: ${rent.source}.`:"Keine belastbare lokale Angebotsmietquelle gefunden."},
+    {tier:2,name:"Offizielle lokale Mietstatistik",status:used===2?"verwendet":"nicht_verfuegbar",detail:used===2?`Verwendet: ${rent.source}.`:"Keine unterstützte lokale Mietstatistik verfügbar."},
+    {tier:3,name:"Offizielle Gemeinde-/Städtestatistik",status:used===3?"verwendet":discovered.some((d)=>d.kind==="rent")?"gefunden":"nicht_verfuegbar",detail:used===3?`Verwendet: ${rent.source}.`:"Nur explizite CHF/m²-Datensätze mit Zimmerbezug werden akzeptiert."},
+    {tier:4,name:"BFS Kanton × Zimmerzahl",status:used===4?"verwendet":"nicht_verfuegbar",detail:used===4?`BFS-Fallback ${rent.geographyName}; Zimmerzahl wird linear interpoliert.`:used?"Nicht benötigt, weil eine präzisere Quelle verwendet wurde.":"BFS-Fallback konnte nicht geladen werden."},
   ];
-
-  const confidence = price?.value && rent?.value ? "hoch" : price?.value || rent?.value ? "mittel" : "eingeschränkt";
+  const confidence=price?.value&&rent?.value?"hoch":price?.value||rent?.value?"mittel":"eingeschränkt";
   return {
-    pricePerSqm: price?.value ?? null,
-    rentPerSqm: rent?.value ?? null,
-    priceSource: price?.source ?? null,
-    rentSource: rent?.source ?? null,
-    confidence,
-    radiusKm: null,
-    discoveredDatasets: discovered,
-    tiers,
-    note: price?.value || rent?.value
-      ? "Mindestens ein belastbarer öffentlicher Marktbenchmark wurde automatisch übernommen. Fehlende Werte werden nicht erfunden."
-      : "Es wurden keine automatisch auslesbaren lokalen Marktbenchmarks gefunden. HomeIQ zeigt deshalb keinen erfundenen Marktwert bzw. keine erfundene Marktmiete. Ebene 3 bleibt bis zu einem offiziellen Datenzugang deaktiviert.",
+    pricePerSqm:price?.value??null,rentPerSqm:rent?.value??null,
+    priceSource:price?.source??null,rentSource:rent?.source??null,
+    rentSourceTier:rent?.tier??null,rentType:rent?.rentType??null,rentSourceYear:rent?.sourceYear??null,
+    rentGeographyLevel:rent?.geographyLevel??null,rentGeographyName:rent?.geographyName??null,
+    rentUncertaintyPct:rent?.uncertaintyPct??null,rentDataQuality:rent?.dataQuality??null,
+    confidence,radiusKm:null,discoveredDatasets:discovered,tiers,
+    note:rent?.value?`Marktmiete V1: ${rent.value.toFixed(2)} CHF/m² · Stufe ${rent.tier} · ohne Objekt-Zu-/Abschläge.`:
+      "Kein belastbarer öffentlicher CHF/m²-Mietbenchmark gefunden. HomeIQ erfindet keinen Ersatzwert."
   };
 }
 
@@ -201,15 +379,18 @@ async function fetchMarketLayers(city, propertyType, rooms) {
 export default async function handler(req, res) {
   if (req.method !== "GET") return json(res, 405, { error: "Method not allowed" });
   const city = String(req.query.city || "").trim();
+  const postalCode = String(req.query.postalCode || "").trim();
   const propertyType = String(req.query.propertyType || "wohnung").trim();
   const rooms = Number(req.query.rooms || 0);
   if (!city) return json(res, 400, { error: "Ort ist erforderlich." });
   try {
-    const result = await fetchMarketLayers(city, propertyType, rooms);
+    const result = await fetchMarketLayers(city, propertyType, rooms, postalCode);
     return json(res, 200, result);
   } catch {
     return json(res, 200, {
       pricePerSqm: null, rentPerSqm: null, priceSource: null, rentSource: null,
+      rentSourceTier: null, rentType: null, rentSourceYear: null,
+      rentGeographyLevel: null, rentGeographyName: null, rentUncertaintyPct: null, rentDataQuality: null,
       confidence: "eingeschränkt", radiusKm: null, discoveredDatasets: [], tiers: [],
       note: "Die Marktquellen konnten nicht rechtzeitig geladen werden. Es werden keine Ersatzwerte verwendet.",
     });

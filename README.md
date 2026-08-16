@@ -34,3 +34,13 @@ Basis: stabile V5.5 ohne Bevölkerungsabfrage. Die funktionierende Standortdaten
 - Eigenkapitalrendite-Score neu kalibriert: 0%=0, 2%=20, 4%=40, 5%=50, 6%=60, 7%=70, 8%=80, 9%=90, ab 10%=100.
 - Zwischenwerte werden linear interpoliert.
 - Lagequalität, Objektqualität, Marktfähigkeit sowie die Hauptgewichtungen 35/20/25/12/8 bleiben unverändert.
+
+
+## V5.8 – Marktmiete V1
+- Basis V5.7.25; bestehende Score-, Lage-, Rendite- und Standortlogik unverändert.
+- 4-stufige Marktmiet-Hierarchie: Angebotsmieten lokal → lokale Mietstatistik → Gemeinde-/Städtestatistik → BFS Kanton × Zimmerzahl.
+- Formel: Wohnfläche × bestverfügbarer CHF/m²-Wert.
+- Halbe Zimmer: lineare Interpolation.
+- Bandbreite: ±5 / ±7 / ±10 / ±15 % nach Datenstufe.
+- Parkplatz separat; keine Objekt-Zu-/Abschläge in V1.
+- Ist-Abweichung: (Ist – Markt) / Markt.

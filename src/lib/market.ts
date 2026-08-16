@@ -215,11 +215,11 @@ const areaFactor = (area: number) => area < 45 ? 1.10 : area < 70 ? 1.05 : area 
 
 function unitRent(unit: RentalUnit, fallbackBenchmark: number): UnitMarketRentResult {
   const benchmark = unit.marketRentPerSqm > 0 ? unit.marketRentPerSqm : fallbackBenchmark;
-  const adjustedMarketRentPerSqm = benchmark * floorFactor(unit.floor) * conditionFactor(unit.condition) * qualityFactor(unit.quality) * featureFactor(unit.features) * areaFactor(unit.livingArea);
-  const estimatedMonthlyMarketRent = adjustedMarketRentPerSqm * unit.livingArea + (unit.parkingMonthlyRent || 0);
-  const currentMonthlyRent = unit.currentMonthlyRent + (unit.parkingMonthlyRent || 0);
-  const differenceMonthly = estimatedMonthlyMarketRent - currentMonthlyRent;
-  const differencePercent = currentMonthlyRent > 0 ? differenceMonthly / currentMonthlyRent * 100 : 0;
+  const adjustedMarketRentPerSqm = benchmark;
+  const estimatedMonthlyMarketRent = benchmark * unit.livingArea;
+  const currentMonthlyRent = unit.currentMonthlyRent;
+  const differenceMonthly = currentMonthlyRent - estimatedMonthlyMarketRent;
+  const differencePercent = estimatedMonthlyMarketRent > 0 ? differenceMonthly / estimatedMonthlyMarketRent * 100 : 0;
   return { ...unit, currentMonthlyRent, adjustedMarketRentPerSqm, estimatedMonthlyMarketRent, differenceMonthly, differencePercent };
 }
 
@@ -242,12 +242,17 @@ export function analyseMarket(input: AnalysisInput, location: LocationAnalysis):
   const units = marketRentAvailable && input.propertyType === "mfh" ? input.rentalUnits.map(unit => unitRent(unit, input.regionalMarketRentPerSqm)) : [];
   const estimatedMonthlyMarketRent = marketRentAvailable ? (units.length
     ? units.reduce((sum, unit) => sum + unit.estimatedMonthlyMarketRent, 0)
-    : input.regionalMarketRentPerSqm * input.livingArea * floorFactor(input.floor) * condition * quality * featureFactor(input.features) * areaFactor(input.livingArea) + input.parkingSpaces * 120) : 0;
-  const currentMonthlyRent = input.propertyType === "mfh" ? input.rentalUnits.reduce((sum, unit) => sum + unit.currentMonthlyRent + (unit.parkingMonthlyRent || 0), 0) : input.monthlyRent + (input.parkingMonthlyRent || 0);
-  const rentDifferenceMonthly = marketRentAvailable ? estimatedMonthlyMarketRent - currentMonthlyRent : 0;
-  const rentDifferencePercent = marketRentAvailable && currentMonthlyRent > 0 ? rentDifferenceMonthly / currentMonthlyRent * 100 : 0;
-  const rentRating = !marketRentAvailable ? "Nicht verfügbar" : rentDifferencePercent >= 6 ? "Mietsteigerungspotenzial" : rentDifferencePercent <= -6 ? "Aktuelle Miete über Marktniveau" : "Miete auf Marktniveau";
+    : input.regionalMarketRentPerSqm * input.livingArea) : 0;
+  const currentMonthlyRent = input.propertyType === "mfh"
+    ? input.rentalUnits.reduce((sum, unit) => sum + unit.currentMonthlyRent, 0)
+    : input.monthlyRent;
+  const rentDifferenceMonthly = marketRentAvailable ? currentMonthlyRent - estimatedMonthlyMarketRent : 0;
+  const rentDifferencePercent = marketRentAvailable && estimatedMonthlyMarketRent > 0 ? rentDifferenceMonthly / estimatedMonthlyMarketRent * 100 : 0;
+  const rentRating = !marketRentAvailable ? "Nicht verfügbar" : rentDifferencePercent <= -6 ? "Mietsteigerungspotenzial" : rentDifferencePercent >= 6 ? "Aktuelle Miete über Marktniveau" : "Miete auf Marktniveau";
+  const rentUncertainty = input.openDataLocation?.market.rentUncertaintyPct ?? 0.15;
+  const estimatedMonthlyMarketRentLow = marketRentAvailable ? estimatedMonthlyMarketRent * (1 - rentUncertainty) : 0;
+  const estimatedMonthlyMarketRentHigh = marketRentAvailable ? estimatedMonthlyMarketRent * (1 + rentUncertainty) : 0;
   const confidence = input.openDataLocation?.market.confidence === "eingeschränkt" ? "niedrig" : input.openDataLocation?.market.confidence || (input.marketDataRadiusKm <= 3 ? "hoch" : input.marketDataRadiusKm <= 7 ? "mittel" : "niedrig");
 
-  return { marketValueAvailable, marketRentAvailable, benchmarkPricePerSqm: input.regionalMarketPricePerSqm, adjustedPricePerSqm, estimatedMarketValue, marketValueLow, marketValueHigh, priceDifference, priceDifferencePercent, priceRating, benchmarkRentPerSqm: input.regionalMarketRentPerSqm, estimatedMonthlyMarketRent, currentMonthlyRent, rentDifferenceMonthly, rentDifferencePercent, rentRating, confidence, units };
+  return { marketValueAvailable, marketRentAvailable, benchmarkPricePerSqm: input.regionalMarketPricePerSqm, adjustedPricePerSqm, estimatedMarketValue, marketValueLow, marketValueHigh, priceDifference, priceDifferencePercent, priceRating, benchmarkRentPerSqm: input.regionalMarketRentPerSqm, estimatedMonthlyMarketRent, estimatedMonthlyMarketRentLow, estimatedMonthlyMarketRentHigh, currentMonthlyRent, rentDifferenceMonthly, rentDifferencePercent, rentRating, confidence, units };
 }

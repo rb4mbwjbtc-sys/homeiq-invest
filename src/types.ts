@@ -32,7 +32,7 @@ export type LocationInputs = {
 export type OpenDataSource = { name: string; detail: string };
 
 export type DataSourceTierStatus = {
-  tier: 1 | 2 | 3;
+  tier: 1 | 2 | 3 | 4;
   name: string;
   status: "verwendet" | "gefunden" | "nicht_verfuegbar" | "vorbereitet";
   detail: string;
@@ -43,6 +43,13 @@ export type OpenDataMarketReport = {
   rentPerSqm: number | null;
   priceSource: string | null;
   rentSource: string | null;
+  rentSourceTier: 1 | 2 | 3 | 4 | null;
+  rentType: "ASKING" | "EXISTING" | null;
+  rentSourceYear: number | null;
+  rentGeographyLevel: "quarter" | "district" | "municipality" | "city" | "canton" | null;
+  rentGeographyName: string | null;
+  rentUncertaintyPct: number | null;
+  rentDataQuality: "sehr hoch" | "hoch" | "mittel-hoch" | "mittel" | null;
   confidence: "hoch" | "mittel" | "eingeschränkt";
   radiusKm: number | null;
   discoveredDatasets: Array<{ title: string; publisher: string; url: string; kind: "price" | "rent" | "other" }>;
@@ -205,6 +212,8 @@ export type MarketAnalysis = {
   priceRating: string;
   benchmarkRentPerSqm: number;
   estimatedMonthlyMarketRent: number;
+  estimatedMonthlyMarketRentLow: number;
+  estimatedMonthlyMarketRentHigh: number;
   currentMonthlyRent: number;
   rentDifferenceMonthly: number;
   rentDifferencePercent: number;

@@ -132,7 +132,7 @@ export function Result() {
       <div className="screen-report">
         <section className="result-hero report-cover">
           <div>
-            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.7.25</span>
+            <span className="eyebrow">HOMEIQ INVEST · ANALYSEBERICHT V5.8</span>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} · {input.postalCode} {input.city}
@@ -217,7 +217,8 @@ export function Result() {
         <section className="panel report-section">
           <div className="section-heading"><div><span className="eyebrow">MARKTMIETANALYSE</span><h2>Ist-Miete und Mietpotenzial</h2></div><TrendingUp size={24} /></div>
           {market.marketRentAvailable ? <>
-            <div className="market-summary"><div className="market-highlight"><span>Geschätzte Marktmiete / Monat</span><strong>{money(market.estimatedMonthlyMarketRent)}</strong><small>Benchmark {money(market.benchmarkRentPerSqm)} / m²</small></div><div className={`market-verdict ${market.rentDifferenceMonthly >= 0 ? "positive" : "negative"}`}><span>{market.rentRating}</span><strong>{signedMoney(market.rentDifferenceMonthly)} / Monat</strong><small>{percent(market.rentDifferencePercent)} zur aktuellen Miete</small></div></div>
+            <div className="market-summary"><div className="market-highlight"><span>Geschätzte Marktmiete / Monat</span><strong>{money(market.estimatedMonthlyMarketRent)}</strong><small>Benchmark {money(market.benchmarkRentPerSqm)} / m² · Bandbreite {money(market.estimatedMonthlyMarketRentLow)} – {money(market.estimatedMonthlyMarketRentHigh)}</small></div><div className={`market-verdict ${market.rentDifferencePercent <= 0 ? "positive" : "negative"}`}><span>{market.rentRating}</span><strong>{market.rentDifferencePercent >= 0 ? "+" : ""}{market.rentDifferencePercent.toFixed(1)} %</strong><small>{money(market.currentMonthlyRent)} Ist-Miete · {market.rentDifferencePercent < 0 ? "unter" : market.rentDifferencePercent > 0 ? "über" : "auf"} geschätztem Marktniveau</small></div></div>
+            <div className="info-box">Datenbasis: {input.openDataLocation?.market.rentSource || "öffentliche Mietstatistik"}{input.openDataLocation?.market.rentGeographyName ? ` · ${input.openDataLocation.market.rentGeographyName}` : ""}{input.openDataLocation?.market.rentSourceYear ? ` · Stand ${input.openDataLocation.market.rentSourceYear}` : ""}{input.openDataLocation?.market.rentSourceTier ? ` · Stufe ${input.openDataLocation.market.rentSourceTier}` : ""}{input.openDataLocation?.market.rentDataQuality ? ` · Datenqualität ${input.openDataLocation.market.rentDataQuality}` : ""}<br/>V1: Wohnfläche × CHF/m²; halbe Zimmer linear interpoliert; noch keine Objekt-Zu-/Abschläge oder Parkplatzschätzung.</div>
             {market.units.length > 0 && <div className="table-wrap"><table className="market-table"><thead><tr><th>Wohnung</th><th>Zimmer</th><th>Fläche</th><th>Ist-Miete</th><th>Marktmiete</th><th>Differenz</th></tr></thead><tbody>{market.units.map((unit)=><tr key={unit.id}><td><strong>{unit.label}</strong><small>{unit.floor}</small></td><td>{unit.rooms}</td><td>{number(unit.livingArea)} m²</td><td>{money(unit.currentMonthlyRent)}</td><td>{money(unit.estimatedMonthlyMarketRent)}</td><td className={unit.differenceMonthly >= 0 ? "positive-text" : "negative-text"}>{signedMoney(unit.differenceMonthly)}<small>{percent(unit.differencePercent)}</small></td></tr>)}</tbody></table></div>}
           </> : <div className="market-unavailable-panel"><strong>Marktmiete derzeit nicht verfügbar</strong><p>Für diesen Standort wurden keine ausreichend belastbaren öffentlichen Mietbenchmarks gefunden. Die eingegebene Ist-Miete wird nicht als Marktwert interpretiert.</p></div>}
         </section>
@@ -321,7 +322,7 @@ export function Result() {
       <article className="print-report">
         <header className="print-header">
           <div>
-            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.7.25</span></div>
+            <div className="print-brand"><img src={homeIqLogo} alt="HomeIQ"/><span>HOMEIQ INVEST · ANALYSE-BERICHT V5.8</span></div>
             <h1>{displayTitle}</h1>
             <p>
               {input.street} {input.postalCode} {input.city}
@@ -376,7 +377,7 @@ export function Result() {
           <h2>PREMIUM-MARKTANALYSE</h2>
           <div className="print-market-columns">
             <div className={!market.marketValueAvailable ? "print-unavailable" : ""}><span>OPTIMALER KAUFPREIS</span>{market.marketValueAvailable ? <><h3>{money(market.estimatedMarketValue)}</h3><p>Marktwertspanne {money(market.marketValueLow)} – {money(market.marketValueHigh)}</p><p>Eingabe {money(input.purchasePrice)} · Abweichung {percent(market.priceDifferencePercent)}</p></> : <><h3>Nicht verfügbar</h3><p>Kein ausreichend belastbarer öffentlicher Preisbenchmark gefunden.</p></>}</div>
-            <div className={!market.marketRentAvailable ? "print-unavailable" : ""}><span>MARKTMIETE</span>{market.marketRentAvailable ? <><h3>{money(market.estimatedMonthlyMarketRent)} / Monat</h3><p>Benchmark {money(market.benchmarkRentPerSqm)} / m²</p><p>Ist-Miete {money(market.currentMonthlyRent)} · Abweichung {percent(market.rentDifferencePercent)}</p></> : <><h3>Nicht verfügbar</h3><p>Kein ausreichend belastbarer öffentlicher Mietbenchmark gefunden.</p></>}</div>
+            <div className={!market.marketRentAvailable ? "print-unavailable" : ""}><span>MARKTMIETE</span>{market.marketRentAvailable ? <><h3>{money(market.estimatedMonthlyMarketRent)} / Monat</h3><p>Benchmark {money(market.benchmarkRentPerSqm)} / m² · Band {money(market.estimatedMonthlyMarketRentLow)} – {money(market.estimatedMonthlyMarketRentHigh)}</p><p>Ist-Miete {money(market.currentMonthlyRent)} · {market.rentDifferencePercent >= 0 ? "+" : ""}{market.rentDifferencePercent.toFixed(1)} % {market.rentDifferencePercent < 0 ? "unter" : market.rentDifferencePercent > 0 ? "über" : "auf"} Marktniveau</p><p>{input.openDataLocation?.market.rentSource || "Öffentliche Mietstatistik"}{input.openDataLocation?.market.rentSourceTier ? ` · Stufe ${input.openDataLocation.market.rentSourceTier}` : ""}</p></> : <><h3>Nicht verfügbar</h3><p>Kein ausreichend belastbarer öffentlicher Mietbenchmark gefunden.</p></>}</div>
           </div>
           {market.marketRentAvailable && market.units.length > 0 && <table className="print-unit-table"><thead><tr><th>Wohnung</th><th>m²</th><th>Ist</th><th>Markt</th></tr></thead><tbody>{market.units.slice(0,8).map((unit)=><tr key={unit.id}><td>{unit.label}</td><td>{number(unit.livingArea)}</td><td>{money(unit.currentMonthlyRent)}</td><td>{money(unit.estimatedMonthlyMarketRent)}</td></tr>)}</tbody></table>}
         </section>
