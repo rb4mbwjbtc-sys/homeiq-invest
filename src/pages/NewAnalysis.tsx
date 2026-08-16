@@ -319,9 +319,67 @@ export function NewAnalysis() {
     setMarketValueGenerated(generatedMarket.estimatedMarketValue);
   };
 
-  const generateMarketRent = () => {
-    if (!generatedMarket || form.regionalMarketRentPerSqm <= 0) return;
-    setMarketRentGenerated(generatedMarket.estimatedMonthlyMarketRent);
+  const generateMarketRent = async () => {
+    // Während der Testphase ist die Marktmietfunktion bewusst freigeschaltet.
+    // Falls beim ersten Standortladen noch kein Mietbenchmark verfügbar war,
+    // wird die Marktpipeline mit demselben Objekt nochmals gezielt geladen.
+    if (form.regionalMarketRentPerSqm > 0 && generatedMarket) {
+      setMarketRentGenerated(generatedMarket.estimatedMonthlyMarketRent);
+      return;
+    }
+
+    if (!form.postalCode || !form.city) {
+      setLocationError("Bitte zuerst PLZ und Ort erfassen.");
+      return;
+    }
+
+    setLoadingLocation(true);
+    setLocationError(null);
+
+    try {
+      const report = await loadSwissOpenDataLocation(form);
+      const rentPerSqm = report.market.rentPerSqm ?? 0;
+
+      setForm((previous) => ({
+        ...previous,
+        regionalMarketRentPerSqm: rentPerSqm,
+        regionalMarketPricePerSqm: report.market.pricePerSqm ?? previous.regionalMarketPricePerSqm,
+        openDataLocation: {
+          address: report.address,
+          building: report.building,
+          evidence: report.evidence,
+          quality: report.quality,
+          missing: report.missing,
+          loadedAt: report.loadedAt,
+          sources: report.sources,
+          market: report.market,
+        },
+      }));
+
+      if (rentPerSqm <= 0) {
+        setMarketRentGenerated(null);
+        setLocationError(
+          report.market.note ||
+          "Die Marktmietdaten konnten auch beim erneuten Laden nicht ermittelt werden."
+        );
+        return;
+      }
+
+      const estimated = form.propertyType === "mfh"
+        ? form.rentalUnits.reduce((sum, unit) => sum + rentPerSqm * unit.livingArea, 0)
+        : rentPerSqm * form.livingArea;
+
+      setMarketRentGenerated(estimated);
+    } catch (error) {
+      setMarketRentGenerated(null);
+      setLocationError(
+        error instanceof Error
+          ? error.message
+          : "Marktmietdaten konnten nicht geladen werden."
+      );
+    } finally {
+      setLoadingLocation(false);
+    }
   };
 
   const useAttractivePurchasePrice = (factor: number) => {
@@ -373,7 +431,7 @@ export function NewAnalysis() {
   return (
     <div className="page-stack narrow">
       <div className="page-heading">
-        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.8</span>
+        <span className="eyebrow">{editId ? "ANALYSE BEARBEITEN" : "NEUE ANALYSE"} · V5.8.1</span>
         <h1>{editId ? "Analyse bearbeiten" : "Immobilie erfassen"}</h1>
         <p>Mit zuverlässiger Lageanalyse sowie Marktwert- und Marktmietschätzung.</p>
       </div>
@@ -829,13 +887,15 @@ export function NewAnalysis() {
                 <button
                   type="button"
                   className="market-action-button"
-                  onClick={generateMarketRent}
-                  disabled={form.regionalMarketRentPerSqm <= 0}
+                  onClick={() => { void generateMarketRent(); }}
+                  disabled={loadingLocation}
                 >
-                  <Sparkles size={20} /> Marktmiete automatisch berechnen (Premium)
+                  <Sparkles size={20} /> {loadingLocation ? "Marktmietdaten werden geladen…" : "Marktmiete automatisch berechnen"}
                 </button>
                 {form.regionalMarketRentPerSqm <= 0 && (
-                  <small className="market-data-unavailable">Kein belastbarer Marktmiet-Benchmark gefunden. HomeIQ berechnet deshalb bewusst keine Ersatzmiete.</small>
+                  <small className="market-data-unavailable">
+                    Testmodus: Beim Klick versucht HomeIQ die Marktmietdaten erneut zu laden und verwendet bei fehlenden lokalen Daten den BFS-Fallback (Stufe 4).
+                  </small>
                 )}
                 {marketRentGenerated !== null && generatedMarket && (
                   <div className="market-calculation-card rent-card">

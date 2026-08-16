@@ -233,24 +233,90 @@ function cantonCodeFromProps(props={}) {
 }
 
 async function resolveCanton(postalCode, city) {
+  const parseCantonCode = (raw = "") => {
+    const text = cleanLabel(raw);
+    const paren = text.match(/\(([A-Z]{2})\)/);
+    if (paren && CANTON_NAMES[paren[1]]) return paren[1];
+
+    const tokens = normalizeText(text).split(" ");
+    for (const token of tokens) {
+      const upper = token.toUpperCase();
+      if (CANTON_NAMES[upper]) return upper;
+    }
+    return null;
+  };
+
+  // 1. Bevorzugt: Gemeinde-Suche. GeoAdmin liefert bei Gemeinden das
+  // Kantonskürzel typischerweise im Label/Detail, z.B. "(AG)".
   try {
-    const searchText = [postalCode,city].filter(Boolean).join(" ");
-    const params = new URLSearchParams({searchText,type:"locations",origins:postalCode?"zipcode":"gg25",sr:"2056",limit:"10"});
+    const municipalityParams = new URLSearchParams({
+      searchText: city || postalCode,
+      type: "locations",
+      origins: "gg25",
+      sr: "2056",
+      limit: "10",
+    });
+    const municipality = await fetchJson(`${GEOADMIN_SEARCH}?${municipalityParams}`, {}, 3500);
+
+    for (const hit of municipality.results || []) {
+      const code =
+        parseCantonCode(hit.attrs?.label || "") ||
+        parseCantonCode(hit.attrs?.detail || "");
+      if (code) return { code, name: CANTON_NAMES[code] };
+    }
+  } catch {
+    // Räumlicher Fallback unten.
+  }
+
+  // 2. Bestehender räumlicher Fallback über Koordinaten + Kantonslayer.
+  try {
+    const searchText = [postalCode, city].filter(Boolean).join(" ");
+    const params = new URLSearchParams({
+      searchText,
+      type: "locations",
+      origins: postalCode ? "zipcode" : "gg25",
+      sr: "2056",
+      limit: "10",
+    });
     const found = await fetchJson(`${GEOADMIN_SEARCH}?${params}`, {}, 3500);
     const attrs = found.results?.[0]?.attrs || {};
-    const easting = Number(attrs.y), northing = Number(attrs.x);
-    if (![easting,northing].every(Number.isFinite)) return null;
-    const d=1000;
+    const easting = Number(attrs.y);
+    const northing = Number(attrs.x);
+
+    if (![easting, northing].every(Number.isFinite)) return null;
+
+    const d = 1000;
     const identify = new URLSearchParams({
-      geometry:`${easting},${northing}`,geometryType:"esriGeometryPoint",geometryFormat:"geojson",sr:"2056",
-      imageDisplay:"1000,1000,96",mapExtent:`${easting-d},${northing-d},${easting+d},${northing+d}`,
-      tolerance:"2",layers:`all:${CANTON_LAYER}`,returnGeometry:"false",lang:"de",limit:"10"
+      geometry: `${easting},${northing}`,
+      geometryType: "esriGeometryPoint",
+      geometryFormat: "geojson",
+      sr: "2056",
+      imageDisplay: "1000,1000,96",
+      mapExtent: `${easting-d},${northing-d},${easting+d},${northing+d}`,
+      tolerance: "2",
+      layers: `all:${CANTON_LAYER}`,
+      returnGeometry: "false",
+      lang: "de",
+      limit: "10",
     });
+
     const payload = await fetchJson(`${GEOADMIN_IDENTIFY}?${identify}`, {}, 3500);
-    const props = payload.results?.[0]?.properties || payload.results?.[0]?.attributes || {};
-    const code = cantonCodeFromProps(props);
-    return code ? {code,name:CANTON_NAMES[code]} : null;
-  } catch { return null; }
+    const props =
+      payload.results?.[0]?.properties ||
+      payload.results?.[0]?.attributes ||
+      {};
+
+    const directCode =
+      parseCantonCode(props.name || "") ||
+      parseCantonCode(props.bez || "") ||
+      parseCantonCode(props.displayname || "") ||
+      parseCantonCode(JSON.stringify(props));
+
+    const code = directCode || cantonCodeFromProps(props);
+    return code ? { code, name: CANTON_NAMES[code] } : null;
+  } catch {
+    return null;
+  }
 }
 
 function fillMerged(matrix, merges=[]) {
@@ -293,7 +359,7 @@ async function tryBfsRentBenchmark(postalCode, city, rooms) {
     const canton=await resolveCanton(postalCode,city);
     if (!canton) return null;
     const XLSX=await import("xlsx");
-    const buffer=await fetchArrayBuffer(BFS_RENT_XLS,{},7000);
+    const buffer=await fetchArrayBuffer(BFS_RENT_XLS,{},10000);
     const workbook=XLSX.read(buffer,{type:"array"});
     const values={};
     for (const name of workbook.SheetNames) {
@@ -370,7 +436,7 @@ async function fetchMarketLayers(city, propertyType, rooms, postalCode) {
     rentGeographyLevel:rent?.geographyLevel??null,rentGeographyName:rent?.geographyName??null,
     rentUncertaintyPct:rent?.uncertaintyPct??null,rentDataQuality:rent?.dataQuality??null,
     confidence,radiusKm:null,discoveredDatasets:discovered,tiers,
-    note:rent?.value?`Marktmiete V1: ${rent.value.toFixed(2)} CHF/m² · Stufe ${rent.tier} · ohne Objekt-Zu-/Abschläge.`:
+    note:rent?.value?`Marktmiete V1: ${rent.value.toFixed(2)} CHF/m² · Stufe ${rent.tier} · ${rent.geographyName || city} · ohne Objekt-Zu-/Abschläge.`:
       "Kein belastbarer öffentlicher CHF/m²-Mietbenchmark gefunden. HomeIQ erfindet keinen Ersatzwert."
   };
 }
